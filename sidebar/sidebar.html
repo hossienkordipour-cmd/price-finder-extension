@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self';" />
+  <title>قیمت‌یاب</title>
+  <link rel="stylesheet" href="sidebar.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">
+      <span class="logo-icon">🏷️</span>
+      <span class="logo-text">قیمت‌یاب</span>
+    </div>
+    <div class="header-badge">بتا</div>
+  </header>
+
+  <!-- محصول فعلی -->
+  <div id="current-product" class="current-product hidden">
+    <div class="section-label">محصول شناسایی‌شده</div>
+    <div class="product-card current">
+      <img id="product-image" class="product-img" src="" alt="" />
+      <div class="product-info">
+        <div id="product-name" class="product-name"></div>
+        <div id="product-price" class="product-price current-price"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- وضعیت loading -->
+  <div id="loading-state" class="state-container hidden">
+    <div class="spinner"></div>
+    <p class="state-text">در حال جستجو در فروشگاه‌ها...</p>
+    <div class="store-tags">
+      <span class="store-tag dk">دیجی‌کالا</span>
+      <span class="store-tag tr">ترب</span>
+      <span class="store-tag em">ایمالز</span>
+    </div>
+  </div>
+
+  <!-- وضعیت خالی (قبل از شناسایی) -->
+  <div id="empty-state" class="state-container">
+    <div class="empty-icon">🛍️</div>
+    <p class="state-text">به صفحه محصولی بروید</p>
+    <p class="state-subtext">افزونه به‌طور خودکار بهترین قیمت را پیدا می‌کند</p>
+    <div class="supported-stores">
+      <div class="section-label">فروشگاه‌های پشتیبانی‌شده</div>
+      <div class="store-list">
+        <div class="store-item">
+          <span class="store-dot" style="background:#E42112"></span>
+          <span>دیجی‌کالا</span>
+        </div>
+        <div class="store-item">
+          <span class="store-dot" style="background:#00A95C"></span>
+          <span>ترب</span>
+        </div>
+        <div class="store-item">
+          <span class="store-dot" style="background:#F5A623"></span>
+          <span>ایمالز</span>
+        </div>
+        <div class="store-item">
+          <span class="store-dot" style="background:#6E4BEC"></span>
+          <span>باسلام</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- نتایج -->
+  <div id="results-state" class="hidden">
+    <div class="results-header">
+      <span class="section-label">بهترین قیمت‌ها</span>
+      <span id="results-count" class="results-count"></span>
+    </div>
+
+    <!-- فیلتر -->
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="all">همه</button>
+      <button class="filter-btn" data-filter="digikala">دیجی‌کالا</button>
+      <button class="filter-btn" data-filter="torob">ترب</button>
+      <button class="filter-btn" data-filter="emalls">ایمالز</button>
+      <button class="filter-btn" data-filter="basalam">باسلام</button>
+      <button class="filter-btn" data-filter="divar">دیوار</button>
+      <button class="filter-btn" data-filter="sheypoor">شیپور</button>
+    </div>
+
+    <!-- لیست نتایج -->
+    <div id="results-list" class="results-list"></div>
+
+    <!-- صرفه‌جویی -->
+    <div id="savings-banner" class="savings-banner hidden">
+      <span class="savings-icon">🎉</span>
+      <span id="savings-text"></span>
+    </div>
+  </div>
+
+  <!-- خطا -->
+  <div id="error-state" class="state-container hidden">
+    <div class="empty-icon">⚠️</div>
+    <p class="state-text">خطا در جستجو</p>
+    <button id="retry-btn" class="retry-btn">تلاش مجدد</button>
+  </div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+{
+  "manifest_version": 3,
+  "name": "قیمت‌یاب — مقایسه قیمت ایرانی",
+  "short_name": "قیمت‌یاب",
+  "version": "1.0.0",
+  "description": "بهترین قیمت محصول را در فروشگاه‌های ایرانی پیدا کنید",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "https://*.digikala.com/*",
+    "https://api.digikala.com/*",
+    "https://dkstatics-public.digikala.com/*",
+    "https://dkstatics-public-2.digikala.com/*",
+    "https://*.torob.com/*",
+    "https://torob.com/*",
+    "https://api.torob.com/*",
+    "https://image.torob.com/*",
+    "https://*.emalls.ir/*",
+    "https://www.emalls.ir/*",
+    "https://*.basalam.com/*",
+    "https://basalam.com/*",
+    "https://api.divar.ir/*",
+    "https://divar.ir/*",
+    "https://*.sheypoor.com/*",
+    "https://www.sheypoor.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.digikala.com/*",
+        "https://digikala.com/*",
+        "https://*.torob.com/*",
+        "https://torob.com/*",
+        "https://*.emalls.ir/*",
+        "https://emalls.ir/*",
+        "https://www.emalls.ir/*",
+        "https://*.basalam.com/*",
+        "https://basalam.com/*",
+        "https://*.divar.ir/*",
+        "https://divar.ir/*",
+        "https://*.sheypoor.com/*",
+        "https://sheypoor.com/*",
+        "https://www.sheypoor.com/*"
+      ],
+      "js": ["content/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "side_panel": {
+    "default_path": "sidebar/sidebar.html"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "قیمت‌یاب"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["sidebar/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
