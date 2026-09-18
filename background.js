@@ -1,10 +1,27 @@
 import { isPriceValid, hasRequiredEnglishTokens, getSimilarityScore } from './filters.js';
+
+// ==============================
+// Utility: Fetch with Timeout
+// ==============================
+async function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 6000 } = options;
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  const response = await fetch(resource, {
+    ...options,
+    signal: controller.signal  
+  });
+  clearTimeout(id);
+  return response;
+}
+
+
 // ==============================
 // Background Service Worker
 // ==============================
 
 chrome.action.onClicked.addListener((tab) => {
-  chrome.sidePanel.open({ tabId: tab.id });
+  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_POPUP" }).catch(() => {});
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -25,10 +42,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true });
   }
 
-  if (message.type === "OPEN_SIDEBAR") {
-    chrome.sidePanel.open({ tabId: sender.tab.id });
-    sendResponse({ success: true });
-  }
 
   return true;
 });
@@ -104,7 +117,7 @@ async function searchPrices(product) {
 // ==============================
 async function searchDigikala(productName) {
   const query = encodeURIComponent(productName);
-  const response = await fetch(`https://api.digikala.com/v1/search/?q=${query}&page=1`, {
+  const response = await fetchWithTimeout(`https://api.digikala.com/v1/search/?q=${query}&page=1`, {
     headers: { "Accept": "application/json" }
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -141,7 +154,7 @@ async function searchTorob(productName) {
   // endpoint واقعی که از HTML سایت پیدا کردیم
   const url = `https://api.torob.com/v4/base-product/search/?q=${query}&source=next_desktop`;
 
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       "Accept": "application/json",
       "Referer": "https://torob.com/",
@@ -179,7 +192,7 @@ async function searchTorob(productName) {
 async function searchEmalls(productName) {
   const query = encodeURIComponent(productName);
   try {
-    const response = await fetch(`https://www.emalls.ir/search.aspx?keyword=${query}`, {
+    const response = await fetchWithTimeout(`https://www.emalls.ir/search.aspx?keyword=${query}`, {
       headers: {
         "Accept": "text/html",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
@@ -231,7 +244,7 @@ async function searchBasalam(productName) {
 
   for (const url of endpoints) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         headers: {
           "Accept": "application/json"
         }
@@ -267,7 +280,7 @@ async function searchBasalam(productName) {
 async function searchDivar(productName) {
   try {
     const url = "https://api.divar.ir/v8/web-search/iran";
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -321,7 +334,7 @@ async function searchSheypoor(productName) {
     const query = encodeURIComponent(productName);
     const url = `https://www.sheypoor.com/api/v10.0.0/search?q=${query}`;
     
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       headers: {
         "Accept": "application/json",
       }
@@ -358,6 +371,46 @@ async function searchSheypoor(productName) {
     }).filter(p => p !== null).slice(0, 5);
   } catch (e) {
     console.warn("[شیپور] خطا:", e.message);
+    return [];
+  }
+}
+
+
+// ==============================
+// اسنپ شاپ (Snapp Shop)
+// ==============================
+async function searchSnappShop(productName) {
+  try {
+    const query = encodeURIComponent(productName);
+    // Using the typical snapp API structure
+    const url = `https://snapp.ir/shop/api/v1/search?q=${query}`;
+    
+    const response = await fetchWithTimeout(url, {
+      headers: {
+        "Accept": "application/json",
+      }
+    });
+    
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const items = data?.data?.products || data?.products || [];
+    
+    return items.map(item => {
+      const price = parseInt(String(item.price || item.selling_price || item.discounted_price || 0).replace(/[^\d]/g, "")) || 0;
+      if (price === 0) return null;
+      
+      return {
+        store: "اسنپ‌شاپ", storeColor: "#21D970",
+        name: item.title || item.title_fa || productName,
+        price, originalPrice: price, discount: 0,
+        url: item.url || `https://snapp.ir/shop/search?q=${query}`,
+        image: item.image || item.image_url || item.thumbnail || "",
+        rating: item.rating || 0, reviewCount: item.reviews_count || 0, availability: true,
+      };
+    }).filter(p => p !== null).slice(0, 5);
+  } catch (e) {
+    console.warn("[اسنپ‌شاپ] خطا:", e.message);
     return [];
   }
 }

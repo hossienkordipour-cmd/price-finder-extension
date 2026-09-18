@@ -3,29 +3,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self';" />
-  <title>قیمت‌یاب</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self';" />
+  <title>piqo</title>
   <link rel="stylesheet" href="sidebar.css" />
 </head>
 <body>
   <!-- Header -->
+<!-- Header (LTR like Phia) -->
   <header class="header">
     <div class="header-logo">
-      <span class="logo-icon">🏷️</span>
-      <span class="logo-text">قیمت‌یاب</span>
+      <svg width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <rect width="24" height="24" rx="6" fill="#18E6A3"/>
+        <rect x="6.5" y="6" width="3.5" height="12" rx="1.75" fill="#0A0A0A"/>
+        <circle cx="13" cy="11.5" r="3.5" fill="none" stroke="#0A0A0A" stroke-width="3.5"/>
+      </svg>
+      <span class="logo-text">piqo</span>
+      <span class="header-badge">بتا</span>
     </div>
-    <div class="header-badge">بتا</div>
+    <button id="popup-close-btn" class="header-close-btn">✕</button>
   </header>
 
-  <!-- محصول فعلی -->
+<!-- محصول فعلی -->
   <div id="current-product" class="current-product hidden">
-    <div class="section-label">محصول شناسایی‌شده</div>
     <div class="product-card current">
-      <img id="product-image" class="product-img" src="" alt="" />
-      <div class="product-info">
-        <div id="product-name" class="product-name"></div>
-        <div id="product-price" class="product-price current-price"></div>
+      <div class="current-product-main">
+        <img id="product-image" class="product-img" src="" alt="" onerror="this.style.display='none'" />
+        <div class="product-info">
+          <div id="product-store" class="current-store-name"></div>
+          <div id="product-name" class="product-name"></div> <!-- Hidden to match the clean design -->
+          <div id="product-price" class="product-price current-price"></div>
+        </div>
       </div>
+  
     </div>
   </div>
 
@@ -71,8 +80,23 @@
   <!-- نتایج -->
   <div id="results-state" class="hidden">
     <div class="results-header">
-      <span class="section-label">بهترین قیمت‌ها</span>
-      <span id="results-count" class="results-count"></span>
+      <div class="results-title-group">
+        <span class="section-label">بهترین قیمت‌ها</span>
+        <span id="results-count" class="results-count"></span>
+      </div>
+      <div class="results-actions">
+        <button id="toggle-grid-btn" class="icon-btn" title="تغییر نما">
+          <!-- Grid Icon -->
+          <svg id="icon-grid" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <!-- List Icon (Hidden initially) -->
+          <svg id="icon-list" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- فیلتر -->
@@ -84,16 +108,13 @@
       <button class="filter-btn" data-filter="basalam">باسلام</button>
       <button class="filter-btn" data-filter="divar">دیوار</button>
       <button class="filter-btn" data-filter="sheypoor">شیپور</button>
+      <button class="filter-btn" data-filter="snappshop">اسنپ‌شاپ</button>
     </div>
 
     <!-- لیست نتایج -->
     <div id="results-list" class="results-list"></div>
 
-    <!-- صرفه‌جویی -->
-    <div id="savings-banner" class="savings-banner hidden">
-      <span class="savings-icon">🎉</span>
-      <span id="savings-text"></span>
-    </div>
+
   </div>
 
   <!-- خطا -->

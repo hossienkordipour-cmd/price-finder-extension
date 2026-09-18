@@ -19,6 +19,10 @@ const productPriceEl = document.getElementById("product-price");
 const productImageEl = document.getElementById("product-image");
 const resultsListEl = document.getElementById("results-list");
 const resultsCountEl = document.getElementById("results-count");
+const toggleGridBtn = document.getElementById("toggle-grid-btn");
+const filterBarEl = document.querySelector(".filter-bar");
+const iconGrid = document.getElementById("icon-grid");
+const iconList = document.getElementById("icon-list");
 const savingsBannerEl = document.getElementById("savings-banner");
 const savingsTextEl = document.getElementById("savings-text");
 
@@ -98,9 +102,11 @@ function showLoading() {
 function showProduct(product) {
   show(currentProductEl);
   productNameEl.textContent = product.name || "محصول ناشناخته";
+  const storeEl = document.getElementById("product-store");
+  if (storeEl) storeEl.textContent = product.store || "فروشگاه فعلی";
 
   if (product.price) {
-    productPriceEl.textContent = formatPrice(product.price);
+    productPriceEl.innerHTML = formatPrice(product.price);
   } else {
     productPriceEl.textContent = "";
   }
@@ -120,34 +126,75 @@ function showResults(results) {
   const filtered = getFilteredResults();
   renderResults(filtered);
 
-  // بنر صرفه‌جویی
-  if (currentProduct?.price && results.length > 0) {
+  if (currentProduct && currentProduct.price && results.length > 0) {
     const bestPrice = results[0].price;
     const currentPrice = currentProduct.price;
 
+    savingsBannerEl.classList.remove("hidden");
+    const savingsIcon = savingsBannerEl.querySelector(".savings-icon");
+    
     if (bestPrice < currentPrice) {
       const saving = currentPrice - bestPrice;
       const savingPct = Math.round((saving / currentPrice) * 100);
-      savingsBannerEl.classList.remove("hidden");
-      savingsTextEl.textContent = `می‌توانی ${formatPrice(saving)} (${savingPct}٪) صرفه‌جویی کنی!`;
+      savingsBannerEl.style.color = "var(--error)";
+      savingsIcon.textContent = "💡";
+      savingsTextEl.innerHTML = `میتوانی ${formatPrice(saving)} (${savingPct}٪) ارزان‌تر بخری!`;
+    } else if (allResults.length > 0 && currentPrice === bestPrice) {
+      savingsBannerEl.style.color = "var(--success)";
+      savingsIcon.textContent = "✨";
+      savingsTextEl.textContent = "شما بهترین قیمت را پیدا کردید!";
     } else {
-      savingsBannerEl.classList.add("hidden");
+      savingsBannerEl.style.color = "var(--warning)";
+      savingsIcon.textContent = "⚖️";
+      savingsTextEl.textContent = "این قیمت در بازار معمول است";
     }
+  } else {
+    savingsBannerEl.classList.add("hidden");
   }
 }
 
 function getFilteredResults() {
-  if (activeFilter === "all") return allResults;
-  return allResults.filter(r => {
-    if (activeFilter === "digikala") return r.store === "دیجی‌کالا";
-    if (activeFilter === "torob") return r.store === "ترب";
-    if (activeFilter === "emalls") return r.store === "ایمالز";
-    if (activeFilter === "basalam") return r.store === "باسلام";
-    if (activeFilter === "divar") return r.store === "دیوار";
-    if (activeFilter === "sheypoor") return r.store === "شیپور";
-    return true;
+  let filtered = allResults;
+  
+  // 1. Exclude the current store from the results list
+  if (currentProduct && currentProduct.store) {
+    filtered = filtered.filter(item => item.store !== currentProduct.store);
+  }
+
+  // Hide filter button for current store
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    if (btn.dataset.filter === "all") return;
+    const storeMap = {
+      "digikala": "دیجی‌کالا",
+      "torob": "ترب",
+      "emalls": "ایمالز",
+      "basalam": "باسلام",
+      "divar": "دیوار",
+      "sheypoor": "شیپور"
+    };
+    if (currentProduct && storeMap[btn.dataset.filter] === currentProduct.store) {
+      btn.style.display = 'none';
+    } else {
+      btn.style.display = 'inline-block';
+    }
   });
+
+  // 2. Apply active filter
+  if (activeFilter !== "all") {
+    const storeMap = {
+      "digikala": "دیجی‌کالا",
+      "torob": "ترب",
+      "emalls": "ایمالز",
+      "basalam": "باسلام",
+      "divar": "دیوار",
+      "sheypoor": "شیپور"
+    };
+    filtered = filtered.filter(r => r.store === storeMap[activeFilter]);
+  }
+  
+  return filtered;
 }
+
 
 function renderResults(results) {
   resultsCountEl.textContent = `${results.length} نتیجه`;
@@ -162,60 +209,91 @@ function renderResults(results) {
     return;
   }
 
-  resultsListEl.innerHTML = results.map((item, index) => {
-    const isBest = index === 0;
-    const storeClass = getStoreClass(item.store);
-    const priceClass = isBest ? "result-price best" : "result-price";
+  // تفکیک آکبند و دست‌دوم
+  const newItems = results.filter(r => !['دیوار', 'شیپور'].includes(r.store));
+  const usedItems = results.filter(r => ['دیوار', 'شیپور'].includes(r.store));
 
-    const discountBadge = item.discount > 0
-      ? `<span class="result-discount">−${item.discount}٪</span>`
-      : "";
+  let html = '';
 
-    const originalPrice = (item.originalPrice && item.originalPrice > item.price)
-      ? `<span class="result-original-price">${formatPrice(item.originalPrice)}</span>`
-      : "";
+  if (newItems.length > 0) {
+    
+    html += newItems.map((item, index) => generateCardHtml(item, index === 0)).join("");
+  }
 
-    const ratingHtml = item.rating > 0
-      ? `<div class="result-rating">⭐ ${item.rating.toFixed(1)} (${item.reviewCount})</div>`
-      : "";
+  if (usedItems.length > 0) {
+    html += `<div class="condition-divider">♻️ بازار آزاد (احتمالاً کارکرده)</div>`;
+    html += usedItems.map((item) => generateCardHtml(item, false, true)).join("");
+  }
 
-    const unavailableHtml = !item.availability
-      ? `<span class="unavailable-label">ناموجود</span>`
-      : "";
-
-    const bestBadge = isBest
-      ? `<span class="best-badge">✨ بهترین قیمت</span>`
-      : "";
-
-    return `
-      <a href="${item.url}" target="_blank" class="result-card ${isBest ? "best-price" : ""} ${!item.availability ? "unavailable" : ""}" rel="noopener">
-        ${bestBadge}
-        <img class="result-img" src="${item.image || ""}" alt=""
-          onerror="this.style.display='none'" />
-        <div class="result-content">
-          <div class="result-store">
-            <span class="store-name ${storeClass}">${item.store}</span>
-            ${unavailableHtml}
-          </div>
-          <div class="result-name">${item.name}</div>
-          <div class="result-price-row">
-            <span class="${priceClass}">${formatPrice(item.price)}</span>
-            ${originalPrice}
-            ${discountBadge}
-          </div>
-          ${ratingHtml}
-        </div>
-      </a>
-    `;
-  }).join("");
+  resultsListEl.innerHTML = html;
 }
 
+function generateCardHtml(item, isBest, isUsed = false) {
+  const storeClass = getStoreClass(item.store);
+  const priceClass = "result-price";
+
+  const discountBadge = item.discount > 0
+    ? `<span class="result-discount">−${item.discount}٪</span>`
+    : "";
+
+  const originalPrice = (item.originalPrice && item.originalPrice > item.price)
+    ? `<span class="result-original-price">${formatPrice(item.originalPrice)}</span>`
+    : "";
+
+const ratingHtml = item.rating > 0
+    ? `<div class="result-rating"><span style="color:#FDB022; margin-left:4px;">★</span><span>${item.rating.toFixed(1)}</span> <span style="color:#9EA2AA; font-size:10px; margin-right:4px;">(${item.reviewCount})</span></div>`
+    : "";
+
+  const unavailableHtml = !item.availability
+    ? `<span class="unavailable-label">ناموجود</span>`
+    : "";
+
+  const bestBadge = "";
+
+  const usedBadge = isUsed 
+    ? `<span class="used-badge">بازار آزاد</span>`
+    : "";
+
+  const storeLogos = {
+    "دیجی‌کالا": "https://www.digikala.com/favicon.ico",
+    "ترب": "https://torob.com/favicon.ico",
+    "ایمالز": "https://emalls.ir/favicon.ico",
+    "باسلام": "https://basalam.com/favicon.ico",
+    "دیوار": "https://divar.ir/favicon.ico",
+    "شیپور": "https://www.sheypoor.com/favicon.ico",
+    "اسنپ‌شاپ": "https://snapp.ir/favicon.ico"
+  };
+  const logoUrl = storeLogos[item.store] || "";
+  const logoHtml = logoUrl ? `<img src="${logoUrl}" class="store-icon-img" onerror="this.style.display='none'" />` : "";
+
+  return `
+    <a href="${item.url}" target="_blank" class="result-card ${!item.availability ? "unavailable" : ""}" rel="noopener">
+            <img class="result-img" src="${item.image || ""}" alt=""
+        onerror="this.style.display='none'" />
+      <div class="result-content">
+        <div class="result-name" title="${item.name}">${item.name}</div>
+        <div class="result-store">
+          <span class="store-name ${storeClass}">${logoHtml}${item.store}</span>
+          ${usedBadge}
+          ${unavailableHtml}
+        </div>
+        <div class="result-price-row">
+          <span class="${priceClass}">${formatPrice(item.price)}</span>
+          ${originalPrice}
+          ${discountBadge}
+        </div>
+        ${ratingHtml}
+      </div>
+    </a>
+  `;
+}
 // ==============================
 // توابع کمکی
 // ==============================
 function formatPrice(price) {
   if (!price) return "—";
-  return new Intl.NumberFormat("fa-IR").format(price) + " تومان";
+  const num = new Intl.NumberFormat("fa-IR").format(price);
+  return `<span dir="rtl">${num} <span class="currency-label">تومان</span></span>`;
 }
 
 function getStoreClass(storeName) {
@@ -234,4 +312,84 @@ function show(...elements) {
 
 function hide(...elements) {
   elements.forEach(el => el?.classList.add("hidden"));
+}
+
+
+// ==============================
+// Popup Close Logic
+// ==============================
+document.getElementById('popup-close-btn')?.addEventListener('click', () => {
+  // Tell the parent window (host page) to close this iframe
+  window.parent.postMessage('CLOSE_PIQO_POPUP', '*');
+});
+
+
+// Layout Toggles
+let isGridView = false;
+
+// Load preferences
+chrome.storage.local.get(["isGridView"], (data) => {
+  if (data.isGridView !== undefined) {
+    isGridView = data.isGridView;
+    applyGridState();
+  }
+});
+
+function applyGridState() {
+  if (isGridView) {
+    resultsListEl.classList.add("grid-view");
+    iconGrid.classList.add("hidden");
+    iconList.classList.remove("hidden");
+  } else {
+    resultsListEl.classList.remove("grid-view");
+    iconList.classList.add("hidden");
+    iconGrid.classList.remove("hidden");
+  }
+}
+
+toggleGridBtn.addEventListener("click", () => {
+  isGridView = !isGridView;
+  applyGridState();
+  chrome.storage.local.set({ isGridView });
+});
+
+
+
+// Drag to scroll for filter bar
+const filterBarContainer = document.querySelector('.filter-bar');
+let isDraggingFilter = false;
+if (filterBarContainer) {
+  let isDown = false;
+  let startX;
+  let scrollLeft;
+
+  filterBarContainer.addEventListener('mousedown', (e) => {
+    isDown = true;
+    isDraggingFilter = false;
+    startX = e.pageX - filterBarContainer.offsetLeft;
+    scrollLeft = filterBarContainer.scrollLeft;
+  });
+  filterBarContainer.addEventListener('mouseleave', () => {
+    isDown = false;
+  });
+  filterBarContainer.addEventListener('mouseup', () => {
+    isDown = false;
+    // We handle the click block in a capture phase click listener
+  });
+  filterBarContainer.addEventListener('mousemove', (e) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const x = e.pageX - filterBarContainer.offsetLeft;
+    const walk = (x - startX) * 1.5; 
+    if (Math.abs(walk) > 5) isDraggingFilter = true;
+    filterBarContainer.scrollLeft = scrollLeft - walk;
+  });
+  
+  // Prevent click if we were dragging
+  filterBarContainer.addEventListener('click', (e) => {
+    if (isDraggingFilter) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true);
 }

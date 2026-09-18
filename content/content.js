@@ -9,6 +9,25 @@
   // ==============================
   // پاکسازی نام محصول برای جستجوی دقیق‌تر
   // ==============================
+
+
+  function getAbsoluteUrl(url) {
+    if (!url) return null;
+    if (url.startsWith('//')) return 'https:' + url;
+    if (url.startsWith('/')) return window.location.origin + url;
+    return url;
+  }
+
+  function toEnglishDigits(str) {
+    if (!str) return str;
+    const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
+    const arabicNumbers  = [/٠/g, /١/g, /٢/g, /٣/g, /٤/g, /٥/g, /٦/g, /٧/g, /٨/g, /٩/g];
+    for (let i = 0; i < 10; i++) {
+      str = String(str).replace(persianNumbers[i], i).replace(arabicNumbers[i], i);
+    }
+    return str;
+  }
+
   function cleanProductName(name) {
     if (!name) return null;
 
@@ -39,7 +58,6 @@
   let lastUrl = location.href;
   let detectionTimer = null;
 
-  init();
 
   // نظارت بر تغییر URL (SPA)
   const observer = new MutationObserver(() => {
@@ -52,9 +70,33 @@
 
   function init() { scheduleDetection(); }
 
+let detectionInterval = null;
   function scheduleDetection() {
     clearTimeout(detectionTimer);
-    detectionTimer = setTimeout(detectProduct, 1500);
+    clearInterval(detectionInterval);
+    
+    let attempts = 0;
+    // Initial quick check
+    detectionTimer = setTimeout(() => {
+      detectProduct();
+      // Start polling if not found immediately
+      detectionInterval = setInterval(() => {
+        attempts++;
+        detectProduct();
+        if (attempts > 10) clearInterval(detectionInterval);
+      }, 1500);
+    }, 500);
+  }
+
+
+  let lastDetectedName = null;
+
+  function removePiqoUI() {
+    const widget = document.getElementById('piqo-widget-container');
+    if (widget) widget.remove();
+    const popup = document.getElementById('piqo-popup-iframe');
+    if (popup) popup.remove();
+    lastDetectedName = null; // reset state
   }
 
   // ==============================
@@ -80,10 +122,20 @@
       product = extractGeneric();
     }
 
-    if (product && product.name) {
-      console.log("[قیمت‌یاب] محصول:", product.name);
-      chrome.runtime.sendMessage({ type: "PRODUCT_DETECTED", product });
-      chrome.runtime.sendMessage({ type: "OPEN_SIDEBAR" }).catch(() => {});
+if (product && product.name) {
+      clearInterval(detectionInterval);
+      if (product.name !== lastDetectedName) {
+        console.log("[قیمت‌یاب] محصول:", product.name);
+        lastDetectedName = product.name;
+        chrome.runtime.sendMessage({ type: "PRODUCT_DETECTED", product });
+        injectFloatingButton();
+      } else {
+        // Just make sure widget is injected if it was somehow removed
+        injectFloatingButton();
+      }
+    } else {
+      // Not a product page anymore (SPA navigation to home page, etc.)
+      removePiqoUI();
     }
   }
 
@@ -91,31 +143,115 @@
   // دیجی‌کالا
   // ==============================
   function extractDigikala() {
-    if (!window.location.pathname.includes("/product/")) return null;
-
     let name = null, price = null, image = null;
 
-    // روش ۱: JSON-LD
     try {
-      const ld = document.querySelector('script[type="application/ld+json"]');
-      if (ld) {
-        const d = JSON.parse(ld.textContent);
-        const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : d;
-        if (p) { name = p.name; price = p.offers?.price; image = p.image?.[0] || p.image; }
+      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const script of scripts) {
+        const d = JSON.parse(script.textContent);
+        const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : (d["@type"] === "Product" ? d : null);
+        if (p) { 
+          name = p.name; 
+          const o = p.offers; price = o?.price || o?.lowPrice || (Array.isArray(o) ? (o[0]?.price || o[0]?.lowPrice) : null);
+          image = getAbsoluteUrl(Array.isArray(p.image) ? p.image[0] : p.image);
+          break;
+        }
       }
     } catch {}
 
-    // روش ۲: meta tags
-    if (!name) name = document.querySelector('meta[property="og:title"]')?.content || document.querySelector("h1")?.textContent?.trim();
-    if (!image) image = document.querySelector('meta[property="og:image"]')?.content;
+    // Fallback: H1 is most reliable in Digikala
+    if (!name) {
+      const h1 = document.querySelector("h1");
+      if (h1) name = h1.textContent.trim();
+    }
+    
+    // Only fallback to og:title if it doesn't look like the homepage
+    if (!name) {
+      const og = document.querySelector('meta[property="og:title"]')?.content;
+      if (og && !og.includes("بزرگترین فروشگاه")) name = og;
+    }
 
-    // پاکسازی نام با تابع مشترک
+    if (!image) {
+      image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+    }
+    
+    if (!image) {
+      const galleryImg = document.querySelector('img[src*="dkstatics-public"]');
+      if (galleryImg) image = getAbsoluteUrl(galleryImg.src);
+    }
+
+    if (!price) {
+      const priceSelectors = [
+        '[data-testid="price-no-discount"]',
+        '[data-testid="price-discount"]',
+        '[data-cro="price"]',
+        '.text-h4.color-800',
+        '.text-h4.text-neutral-800',
+        '.text-h4.text-neutral-900',
+        '.text-h4.color-900',
+        'div[class*="price"] span[class*="text-h4"]'
+      ];
+      for (const sel of priceSelectors) {
+        const els = document.querySelectorAll(sel);
+        for (const el of els) {
+          if (el && el.textContent) {
+            let txt = toEnglishDigits(el.textContent).replace(/[^0-9]/g, '');
+            // Price must be at least 4 digits (1,000 تومان)
+            if (txt.length > 3) {
+              const style = window.getComputedStyle(el);
+              if (style.textDecoration.includes('line-through') || el.classList.contains('line-through') || el.closest('del, s, .line-through')) continue;
+              if (el.tagName === 'H1' || el.closest('h1')) continue;
+              
+              price = txt;
+              break;
+            }
+          }
+        }
+        if (price) break;
+      }
+    }
+
+    // Absolute Final DOM Scanner (The Toman strategy)
+    if (!price || isNaN(price) || price === 0) {
+      const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('سبد خرید'));
+      const scope = btn ? (btn.closest('article') || btn.closest('div[class*="flex"]')?.parentElement || document.body) : document.body;
+      
+      const tomans = Array.from(scope.querySelectorAll('*')).filter(el => {
+          return el.childNodes.length === 1 && el.textContent.trim().includes('تومان');
+      });
+      
+      let bestPrice = null;
+      for (const t of tomans) {
+          let text = toEnglishDigits(t.textContent).replace(/[^0-9]/g, '');
+          let prevText = t.previousElementSibling ? toEnglishDigits(t.previousElementSibling.textContent).replace(/[^0-9]/g, '') : '';
+          
+          let priceNum = 0;
+          let targetEl = null;
+          
+          if (prevText.length >= 4) {
+              priceNum = parseInt(prevText);
+              targetEl = t.previousElementSibling;
+          } else if (text.length >= 4) {
+              priceNum = parseInt(text);
+              targetEl = t;
+          }
+          
+          if (priceNum > 50000 && targetEl) {
+             if (targetEl.closest('del, s, .line-through') || window.getComputedStyle(targetEl).textDecoration.includes('line-through')) continue;
+             if (!bestPrice || priceNum < bestPrice) bestPrice = priceNum; 
+          }
+      }
+      if (bestPrice) price = bestPrice;
+    }
+
     if (name) name = cleanProductName(name);
 
-    if (!name) return null;
+    // Strict validation
+    if (!name || name.includes("بزرگترین فروشگاه") || name.includes("فروشگاه اینترنتی")) return null;
+
     return {
-      name, image, source: "digikala", sourceUrl: window.location.href,
-      price: price ? parseInt(String(price).replace(/[^\d]/g, "")) : null,
+      name, image, source: "digikala", store: "دیجی‌کالا", sourceUrl: window.location.href,
+      price: price ? parseInt(toEnglishDigits(price).replace(/[^0-9]/g, "")) : null,
     };
   }
 
@@ -127,54 +263,39 @@
 
     let name = null, price = null, image = null;
 
-    // روش ۱: h1 اصلی صفحه (معمولاً تمیزتره)
     name = document.querySelector("h1")?.textContent?.trim();
-
-    // روش ۲: meta og:title
-    if (!name) {
-      name = document.querySelector('meta[property="og:title"]')?.content;
-    }
-
-    // روش ۳: JSON-LD
-    if (!name) {
-      try {
-        const ld = document.querySelector('script[type="application/ld+json"]');
-        if (ld) {
-          const d = JSON.parse(ld.textContent);
-          const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : d;
-          if (p) {
-            name = p.name;
-            image = p.image?.[0] || p.image;
-            price = p.offers?.lowPrice || p.offers?.price;
-          }
+    if (!name) name = document.querySelector('meta[property="og:title"]')?.content;
+    
+    try {
+      const ld = document.querySelector('script[type="application/ld+json"]');
+      if (ld) {
+        const d = JSON.parse(ld.textContent);
+        const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : d;
+        if (p) {
+          const o = p.offers;
+          const rawPrice = o?.price || o?.lowPrice || (Array.isArray(o) ? (o[0]?.price || o[0]?.lowPrice) : null);
+          if (rawPrice) price = parseInt(toEnglishDigits(rawPrice).replace(/[^0-9]/g, ""));
         }
-      } catch {}
-    }
+      }
+    } catch {}
 
-    image = image || document.querySelector('meta[property="og:image"]')?.content;
+    image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
-    // پاکسازی نام — مهم‌ترین قسمت!
-    if (name) {
-      name = cleanProductName(name);
-    }
-
+    if (name) name = cleanProductName(name);
     if (!name || name.length < 3) return null;
-    return { name, image, source: "torob", sourceUrl: window.location.href, price };
+    
+    return { name, image, source: "torob", store: "ترب", sourceUrl: window.location.href, price };
   }
-
-  // ==============================
-  // ایمالز
-  // ==============================
   function extractEmalls() {
     if (window.location.pathname === "/" || window.location.pathname.toLowerCase().includes("search") || window.location.pathname.includes("لیست-قیمت")) return null;
 
     let name = document.querySelector('meta[property="og:title"]')?.content
       || document.querySelector("h1")?.textContent?.trim();
-    const image = document.querySelector('meta[property="og:image"]')?.content;
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "emalls", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "emalls", store: "ایمالز", sourceUrl: window.location.href, price: null };
   }
 
   // ==============================
@@ -185,11 +306,11 @@
 
     let name = document.querySelector("h1")?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
-    const image = document.querySelector('meta[property="og:image"]')?.content;
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "basalam", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "basalam", store: "باسلام", sourceUrl: window.location.href, price: null };
   }
 
   // ==============================
@@ -204,11 +325,11 @@
 
     let name = document.querySelector('[itemprop="name"]')?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
-    const image = document.querySelector('meta[property="og:image"]')?.content;
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "generic", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "generic", store: "فروشگاه فعلی", sourceUrl: window.location.href, price: null };
   }
 
   // ==============================
@@ -219,11 +340,11 @@
 
     let name = document.querySelector("h1")?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
-    const image = document.querySelector('meta[property="og:image"]')?.content;
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "divar", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "divar", store: "دیوار", sourceUrl: window.location.href, price: null };
   }
 
   // ==============================
@@ -234,10 +355,342 @@
 
     let name = document.querySelector("h1")?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
-    const image = document.querySelector('meta[property="og:image"]')?.content;
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "sheypoor", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "sheypoor", store: "شیپور", sourceUrl: window.location.href, price: null };
   }
+  init();
 })();
+
+
+
+
+// ==============================
+// Advanced Floating Widget (Piqo Button)
+// ==============================
+
+// ==============================
+// Popup UI (Iframe Overlay)
+// ==============================
+
+function togglePiqoPopup(isLeft) {
+  let popup = document.getElementById('piqo-popup-iframe');
+  let widget = document.getElementById('piqo-widget-container');
+  
+  if (!popup) {
+    popup = document.createElement('iframe');
+    popup.id = 'piqo-popup-iframe';
+    popup.src = chrome.runtime.getURL('sidebar/sidebar.html');
+    popup.style.cssText = `
+      position: fixed;
+      top: 8px;
+      width: 380px;
+      height: calc(100vh - 16px);
+      max-height: 800px;
+      border: 1px solid rgba(0,0,0,0.05);
+      border-radius: 24px;
+      box-shadow: 0 12px 36px rgba(10, 10, 10, 0.12);
+      z-index: 2147483646;
+      background: #F5F7F6;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      color-scheme: light;
+    `;
+    document.body.appendChild(popup);
+  }
+
+  const slideStart = isLeft ? 'translateX(-40px)' : 'translateX(40px)';
+
+  // Update position
+  if (isLeft) {
+    popup.style.right = 'auto';
+    popup.style.left = '8px';
+  } else {
+    popup.style.left = 'auto';
+    popup.style.right = '8px';
+  }
+
+  // Toggle
+  if (popup.style.display === 'none' || popup.style.opacity === '0') {
+    // Prep animation
+    popup.style.transform = slideStart;
+    popup.style.display = 'block';
+    
+    // Hide Widget
+    if (widget) {
+      widget.style.transition = 'opacity 0.2s ease';
+      widget.style.opacity = '0';
+      widget.style.pointerEvents = 'none';
+    }
+
+    // force reflow
+    void popup.offsetWidth;
+    popup.style.opacity = '1';
+    popup.style.transform = 'translateX(0)';
+  } else {
+    popup.style.opacity = '0';
+    popup.style.transform = slideStart;
+    
+    // Show Widget
+    if (widget) {
+      widget.style.opacity = '1';
+      widget.style.pointerEvents = 'auto';
+    }
+
+    setTimeout(() => {
+      if (popup.style.opacity === '0') popup.style.display = 'none';
+    }, 300);
+  }
+}
+
+// Listen for close request from the iframe
+window.addEventListener('message', (event) => {
+  if (event.data === 'CLOSE_PIQO_POPUP') {
+    let popup = document.getElementById('piqo-popup-iframe');
+    let widget = document.getElementById('piqo-widget-container');
+    
+    if (popup) {
+      const isLeft = popup.style.left === '8px';
+      popup.style.opacity = '0';
+      popup.style.transform = isLeft ? 'translateX(-40px)' : 'translateX(40px)';
+      
+      if (widget) {
+        widget.style.opacity = '1';
+        widget.style.pointerEvents = 'auto';
+      }
+      
+      setTimeout(() => { popup.style.display = 'none'; }, 300);
+    }
+  }
+});
+
+
+
+function injectFloatingButton() {
+  if (document.getElementById('piqo-widget-container')) return;
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'piqo-widget-container';
+  wrapper.style.cssText = `
+    position: fixed;
+    right: 0px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2147483647; direction: ltr;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  `;
+
+  wrapper.innerHTML = `
+    <style>
+      #piqo-widget-container .piqo-control {
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      #piqo-widget-container:hover .piqo-control {
+        opacity: 1;
+        visibility: visible;
+      }
+      .piqo-btn-core {
+        width: 54px;
+        height: 54px;
+        background: #18E6A3;
+        border-radius: 27px 0 0 27px;
+        box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: border-radius 0.3s ease, background 0.2s ease;
+      }
+      .piqo-btn-core:hover {
+        background: #2BF0B4;
+      }
+      /* When snapped to left */
+      #piqo-widget-container.piqo-left .piqo-btn-core {
+        border-radius: 0 27px 27px 0;
+        box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.15);
+      }
+      #piqo-widget-container.piqo-left .piqo-logo-svg {
+        margin-left: -4px;
+      }
+      #piqo-widget-container:not(.piqo-left) .piqo-logo-svg {
+        margin-right: -4px;
+      }
+      
+      .piqo-close-btn {
+        width: 22px;
+        height: 22px;
+        background: white;
+        border-radius: 50%;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-family: sans-serif;
+        font-size: 12px;
+        font-weight: bold;
+        color: #666;
+      }
+      .piqo-close-btn:hover { background: #f1f1f1; color: #E42112; }
+      
+      .piqo-row {
+        display: flex;
+        align-items: center;
+      }
+      .piqo-grab {
+        cursor: grab;
+        padding: 4px 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+    </style>
+    
+    <div class="piqo-control piqo-close-btn" id="piqo-close" title="بستن موقت قیمت‌یاب">✕</div>
+    <div class="piqo-row">
+      <div class="piqo-control piqo-grab" id="piqo-grab-left">
+        <svg width="12" height="16" viewBox="0 0 12 16" fill="#0A0A0A" style="opacity: 0.4;">
+          <circle cx="4" cy="4" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="4" cy="12" r="1.5"/>
+          <circle cx="8" cy="4" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+        </svg>
+      </div>
+      <div class="piqo-btn-core" id="piqo-main-btn">
+        <svg class="piqo-logo-svg" width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <rect x="6.5" y="6" width="3.5" height="12" rx="1.75" fill="#0A0A0A"/>
+          <circle cx="13" cy="11.5" r="3.5" fill="none" stroke="#0A0A0A" stroke-width="3.5"/>
+        </svg>
+      </div>
+      <div class="piqo-control piqo-grab" id="piqo-grab-right" style="display:none;">
+        <svg width="12" height="16" viewBox="0 0 12 16" fill="#0A0A0A" style="opacity: 0.4;">
+          <circle cx="4" cy="4" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="4" cy="12" r="1.5"/>
+          <circle cx="8" cy="4" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
+        </svg>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(wrapper);
+
+  // --- Drag and Drop Logic ---
+  let isDragging = false;
+  let hasMoved = false;
+  let startX = 0, startY = 0;
+  let initialLeft = 0, initialTop = 0;
+
+  const mainBtn = wrapper.querySelector('#piqo-main-btn');
+  const closeBtn = wrapper.querySelector('#piqo-close');
+  const grabLeft = wrapper.querySelector('#piqo-grab-left');
+  const grabRight = wrapper.querySelector('#piqo-grab-right');
+
+  wrapper.addEventListener('mousedown', (e) => {
+    if (e.target.closest('#piqo-close')) return;
+    
+    isDragging = true;
+    hasMoved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    
+    const rect = wrapper.getBoundingClientRect();
+    initialLeft = rect.left;
+    initialTop = rect.top;
+    
+    wrapper.style.transition = 'none'; 
+    wrapper.style.transform = 'none'; // Clear translateY
+    wrapper.style.top = initialTop + 'px';
+    wrapper.style.left = initialLeft + 'px';
+    wrapper.style.right = 'auto';
+    
+    grabLeft.style.cursor = 'grabbing';
+    grabRight.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+    
+    let newLeft = initialLeft + dx;
+    let newTop = initialTop + dy;
+    
+    // Keep widget within screen bounds
+    newLeft = Math.max(0, Math.min(window.innerWidth - wrapper.offsetWidth, newLeft));
+    newTop = Math.max(0, Math.min(window.innerHeight - wrapper.offsetHeight, newTop));
+    
+    wrapper.style.left = newLeft + 'px';
+    wrapper.style.top = newTop + 'px';
+  });
+
+  window.addEventListener('mouseup', (e) => {
+    if (!isDragging) return;
+    isDragging = false;
+    grabLeft.style.cursor = 'grab';
+    grabRight.style.cursor = 'grab';
+    
+    // Snapping Logic
+    const rect = wrapper.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const screenMid = window.innerWidth / 2;
+    
+    wrapper.style.transition = 'left 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), top 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)';
+    
+    if (centerX > screenMid) {
+      // Snap to Right Edge
+      wrapper.style.left = (window.innerWidth - wrapper.offsetWidth) + 'px';
+      wrapper.classList.remove('piqo-left');
+      grabLeft.style.display = 'flex';
+      grabRight.style.display = 'none';
+      
+      // Cleanup after transition
+      setTimeout(() => {
+        if(isDragging) return;
+        wrapper.style.transition = 'none';
+        wrapper.style.left = 'auto';
+        wrapper.style.right = '0px';
+      }, 400);
+    } else {
+      // Snap to Left Edge
+      wrapper.style.left = '0px';
+      wrapper.classList.add('piqo-left');
+      grabLeft.style.display = 'none';
+      grabRight.style.display = 'flex';
+    }
+  });
+
+  // Close Action
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    wrapper.remove();
+  });
+
+  // Open Sidebar Action
+  mainBtn.addEventListener('click', (e) => {
+    if (hasMoved) return; // Prevent opening if it was a drag
+    togglePiqoPopup(wrapper.classList.contains('piqo-left'));
+  });
+}
+
+
+
+
+// Listen for toolbar icon clicks
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === "TOGGLE_POPUP") {
+    let isLeft = false;
+    const wrapper = document.getElementById('piqo-widget-container');
+    if (wrapper) {
+      isLeft = wrapper.classList.contains('piqo-left');
+    }
+    togglePiqoPopup(isLeft);
+  }
+});

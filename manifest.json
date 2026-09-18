@@ -6,8 +6,7 @@
   "description": "بهترین قیمت محصول را در فروشگاه‌های ایرانی پیدا کنید",
   "permissions": [
     "activeTab",
-    "storage",
-    "sidePanel"
+    "storage"
   ],
   "host_permissions": [
     "https://*.digikala.com/*",
@@ -49,13 +48,12 @@
         "https://sheypoor.com/*",
         "https://www.sheypoor.com/*"
       ],
-      "js": ["content/content.js"],
+      "js": [
+        "content/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
-  "side_panel": {
-    "default_path": "sidebar/sidebar.html"
-  },
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
@@ -73,8 +71,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["sidebar/*"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "sidebar/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }
