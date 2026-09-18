@@ -2,3 +2,4 @@
 syntax_check.js
 test_*.js
 patch_*.js
+node_modules/

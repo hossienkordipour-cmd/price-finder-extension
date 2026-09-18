@@ -56,6 +56,7 @@
   }
 
   let lastUrl = location.href;
+  let lastDetectedName = null;
   let detectionTimer = null;
 
 
@@ -63,6 +64,7 @@
   const observer = new MutationObserver(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
+      lastDetectedName = null; // Force reset on navigation
       scheduleDetection();
     }
   });
@@ -89,7 +91,6 @@ let detectionInterval = null;
   }
 
 
-  let lastDetectedName = null;
 
   function removePiqoUI() {
     const widget = document.getElementById('piqo-widget-container');
@@ -145,31 +146,31 @@ if (product && product.name) {
   function extractDigikala() {
     let name = null, price = null, image = null;
 
+    // H1 is the most reliable source for current SPA state
+    const h1 = document.querySelector("h1");
+    if (h1) name = h1.textContent.trim();
+    
+    if (!name) {
+      const og = document.querySelector('meta[property="og:title"]')?.content;
+      if (og && !og.includes("بزرگترین فروشگاه")) name = og;
+    }
+
     try {
       const scripts = document.querySelectorAll('script[type="application/ld+json"]');
       for (const script of scripts) {
         const d = JSON.parse(script.textContent);
         const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : (d["@type"] === "Product" ? d : null);
         if (p) { 
-          name = p.name; 
-          const o = p.offers; price = o?.price || o?.lowPrice || (Array.isArray(o) ? (o[0]?.price || o[0]?.lowPrice) : null);
+          if (!name) continue;
+          if (name && p.name && !p.name.includes(name.substring(0, 10)) && !name.includes(p.name.substring(0, 10))) {
+             continue;
+          }
+          // فقط تصویر از ld+json بگیر — قیمت رو نه! (دیجی‌کالا ریال میده ولی بقیه تومان)
           image = getAbsoluteUrl(Array.isArray(p.image) ? p.image[0] : p.image);
           break;
         }
       }
     } catch {}
-
-    // Fallback: H1 is most reliable in Digikala
-    if (!name) {
-      const h1 = document.querySelector("h1");
-      if (h1) name = h1.textContent.trim();
-    }
-    
-    // Only fallback to og:title if it doesn't look like the homepage
-    if (!name) {
-      const og = document.querySelector('meta[property="og:title"]')?.content;
-      if (og && !og.includes("بزرگترین فروشگاه")) name = og;
-    }
 
     if (!image) {
       image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);

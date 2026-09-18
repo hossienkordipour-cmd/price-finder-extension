@@ -7,12 +7,17 @@ async function fetchWithTimeout(resource, options = {}) {
   const { timeout = 6000 } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
-  const response = await fetch(resource, {
-    ...options,
-    signal: controller.signal  
-  });
-  clearTimeout(id);
-  return response;
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal  
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    throw error;
+  }
 }
 
 
@@ -52,12 +57,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function searchPrices(product) {
   console.log("[قیمت‌یاب] جستجوی اولیه:", product.name);
 
-  // ساده‌سازی نام برای جستجوی بهتر در دیجی‌کالا و باسلام
-  // گرفتن حداکثر ۵ کلمه اول برای فرار از عنوان‌های طولانی دیوار و شیپور
+  // ساده‌سازی هوشمند نام برای جستجو
   let searchName = product.name;
+  
+  // اگر اسم خیلی طولانیه، بخش‌های کلیدی رو نگه می‌داریم
   const words = searchName.split(/\s+/);
-  if (words.length > 5) {
-    searchName = words.slice(0, 4).join(" ");
+  if (words.length > 6) {
+    // گرفتن کلمات انگلیسی (مدل‌ها)
+    const englishWords = words.filter(w => /[a-zA-Z]/.test(w));
+    // گرفتن ۳ کلمه اول فارسی (معمولا نوع محصول و برند مثل "لپ تاپ اپل")
+    const persianWords = words.filter(w => !/[a-zA-Z]/.test(w)).slice(0, 3);
+    
+    // ترکیب کلمات فارسی و حداکثر ۳ کلمه انگلیسی مهم
+    searchName = [...persianWords, ...englishWords.slice(0, 3)].join(" ");
   }
 
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
@@ -69,10 +81,11 @@ async function searchPrices(product) {
     searchBasalam(searchName),
     searchDivar(searchName),
     searchSheypoor(searchName),
+    searchSnappShop(searchName),
   ]);
 
   const results = [];
-  const names = ["دیجی‌کالا", "ترب", "ایمالز", "باسلام", "دیوار", "شیپور"];
+  const names = ["دیجی‌کالا", "ترب", "ایمالز", "باسلام", "دیوار", "شیپور", "اسنپ‌شاپ"];
   searches.forEach((s, i) => {
     if (s.status === "fulfilled") {
       console.log(`[${names[i]}] ✅ ${s.value.length} نتیجه`);
@@ -86,6 +99,13 @@ async function searchPrices(product) {
   // اعمال فیلترهای هوشمند Phia
   let finalResults = [];
   results.forEach(r => {
+    // اسنپ‌شاپ — فیلتر قیمت کافیه (API نتایج هدفمند برمیگردونه)
+    if (r.store === "اسنپ‌شاپ") {
+      if (product.price && !isPriceValid(product.price, r.price)) return;
+      finalResults.push(r);
+      return;
+    }
+    
     // ۱. فیلتر قیمت (اگه قیمت اصلی رو داریم)
     if (product.price && !isPriceValid(product.price, r.price)) {
       console.log(`[حذف - قیمت] ${r.name} (${r.price} vs ${product.price})`);
@@ -106,6 +126,7 @@ async function searchPrices(product) {
     }
     
     finalResults.push(r);
+
   });
 
   finalResults.sort((a, b) => a.price - b.price);
@@ -205,7 +226,7 @@ async function searchEmalls(productName) {
     const results = [];
 
     // استخراج اطلاعات محصولات از HTML
-    const itemPattern = /class="[^"]*ProductItem[^"]*"([\s\S]{0,3000}?)(?=class="[^"]*ProductItem[^"]*"|<\/section|$)/gi;
+    const itemPattern = /class="[^"]*ProductItem[^"]*"([\s\S]{1,3000}?)(?=(?:class="[^"]*ProductItem[^"]*"|<\/section|<\/div>|$))/gi;
     for (const match of html.matchAll(itemPattern)) {
       const block = match[1];
       const name = block.match(/(?:title|alt)="([^"]{5,120})"/)?.[1];
@@ -279,7 +300,7 @@ async function searchBasalam(productName) {
 // ==============================
 async function searchDivar(productName) {
   try {
-    const url = "https://api.divar.ir/v8/web-search/iran";
+    const url = "https://api.divar.ir/v8/postlist/w/search";
     const response = await fetchWithTimeout(url, {
       method: "POST",
       headers: {
@@ -287,36 +308,40 @@ async function searchDivar(productName) {
         "Accept": "application/json",
       },
       body: JSON.stringify({
-        json_schema: { query: productName }
+        page: { page_number: 1 },
+        filters: { query: productName }
       })
     });
     
     if (!response.ok) return [];
 
     const data = await response.json();
-    const widgets = data?.web_widgets?.post_list || [];
+    const widgets = data?.list_widgets || [];
     
     return widgets.map(w => {
+      if (w.widget_type !== "POST_ROW") return null;
       const item = w.data;
       if (!item) return null;
       
-      const priceText = item.description || "";
-      // فیلتر کردن کالاهای توافقی و بدون قیمت
+      // قیمت در فیلد middle_description_text هست
+      const priceText = item.middle_description_text || "";
       if (priceText.includes("توافقی") || priceText.includes("معاوضه") || !priceText.includes("تومان")) {
         return null;
       }
       
-      const price = parseInt(priceText.replace(/[^\d]/g, "")) || 0;
+      const persianNums = {'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
+      const normalized = priceText.replace(/[۰-۹]/g, d => persianNums[d] || d);
+      const price = parseInt(normalized.replace(/[^0-9]/g, "")) || 0;
       if (price === 0) return null;
 
-      const token = item.action?.payload?.token;
+      const token = item.action?.payload?.token || item.token;
       
       return {
         store: "دیوار", storeColor: "#A62626",
         name: item.title || productName,
         price, originalPrice: price, discount: 0,
         url: token ? `https://divar.ir/v/${token}` : `https://divar.ir/s/iran?q=${encodeURIComponent(productName)}`,
-        image: item.image_url || item.image || "",
+        image: item.image_url || "",
         rating: 0, reviewCount: 0, availability: true,
       };
     }).filter(p => p !== null).slice(0, 5);
@@ -335,37 +360,43 @@ async function searchSheypoor(productName) {
     const url = `https://www.sheypoor.com/api/v10.0.0/search?q=${query}`;
     
     const response = await fetchWithTimeout(url, {
-      headers: {
-        "Accept": "application/json",
-      }
+      credentials: "omit",
+      headers: { "Accept": "application/json" }
     });
     
     if (!response.ok) return [];
 
     const data = await response.json();
-    const items = data?.data?.items || [];
+    // data.data is an ARRAY (not object with .items)
+    const items = Array.isArray(data?.data) ? data.data : (data?.data?.items || []);
     
     return items.map(item => {
       const attributes = item.attributes;
       if (!attributes) return null;
       
-      // بررسی قیمت
+      const title = attributes.title;
+      if (!title) return null;
+      
+      // قیمت در attributes.price است که آرایه‌ای از آبجکت‌هاست
       const priceArr = attributes.price || [];
-      const priceObj = priceArr.length > 0 ? priceArr[0] : null;
+      const priceObj = Array.isArray(priceArr) ? priceArr[0] : null;
       if (!priceObj) return null;
       
-      const amountStr = priceObj.amount || "";
-      if (amountStr.includes("توافقی") || amountStr.includes("معاوضه")) return null;
+      const amountStr = String(priceObj.amount || "");
+      if (amountStr.includes("توافقی") || amountStr.includes("معاوضه") || amountStr === "") return null;
       
-      const price = parseInt(amountStr.replace(/[^\d]/g, "")) || 0;
+      const price = parseInt(amountStr.replace(/[^0-9]/g, "")) || 0;
       if (price === 0) return null;
+      
+      // تصویر در attributes.images.thumbnails است
+      const imgUrl = attributes.images?.thumbnails?.landscape || attributes.images?.thumbnails?.round || attributes.image || "";
       
       return {
         store: "شیپور", storeColor: "#0050FF",
-        name: attributes.title || productName,
+        name: title,
         price, originalPrice: price, discount: 0,
         url: attributes.url || `https://www.sheypoor.com/search?q=${query}`,
-        image: attributes.image || "",
+        image: imgUrl,
         rating: 0, reviewCount: 0, availability: true,
       };
     }).filter(p => p !== null).slice(0, 5);
@@ -380,37 +411,116 @@ async function searchSheypoor(productName) {
 // اسنپ شاپ (Snapp Shop)
 // ==============================
 async function searchSnappShop(productName) {
-  try {
-    const query = encodeURIComponent(productName);
-    // Using the typical snapp API structure
-    const url = `https://snapp.ir/shop/api/v1/search?q=${query}`;
-    
-    const response = await fetchWithTimeout(url, {
-      headers: {
-        "Accept": "application/json",
+  // Strategy: open snappshop.ir in a background tab, inject fetch, close tab
+  return new Promise((resolve) => {
+    // First check if there's already an open snappshop tab
+    chrome.tabs.query({ url: "*://*.snappshop.ir/*" }, (existingTabs) => {
+      if (existingTabs && existingTabs.length > 0) {
+        // Use existing tab
+        sendToSnappBridge(existingTabs[0].id, productName, resolve, false);
+      } else {
+        // Open a new background tab to snappshop.ir
+        chrome.tabs.create({ url: "https://snappshop.ir", active: false }, (newTab) => {
+          if (chrome.runtime.lastError || !newTab) {
+            resolve(searchSnappShopDirect(productName));
+            return;
+          }
+          // Wait for the tab to fully load (snappshop needs to run JS challenge)
+          const tabId = newTab.id;
+          let loaded = false;
+          
+          const onUpdated = (updatedTabId, info) => {
+            if (updatedTabId !== tabId) return;
+            if (info.status === "complete" && !loaded) {
+              loaded = true;
+              chrome.tabs.onUpdated.removeListener(onUpdated);
+              // Wait a bit for ArvanCloud challenge to resolve
+              setTimeout(() => {
+                sendToSnappBridge(tabId, productName, (results) => {
+                  chrome.tabs.remove(tabId).catch(() => {});
+                  resolve(results);
+                }, true);
+              }, 2000);
+            }
+          };
+          
+          chrome.tabs.onUpdated.addListener(onUpdated);
+          
+          // Timeout after 15s
+          setTimeout(() => {
+            if (!loaded) {
+              chrome.tabs.onUpdated.removeListener(onUpdated);
+              chrome.tabs.remove(tabId).catch(() => {});
+              resolve(searchSnappShopDirect(productName));
+            }
+          }, 15000);
+        });
       }
     });
-    
-    if (!response.ok) return [];
+  });
+}
 
+function sendToSnappBridge(tabId, productName, resolve, isNewTab) {
+  chrome.tabs.sendMessage(tabId, { type: "SNAPPSHOP_SEARCH", query: productName }, (response) => {
+    if (chrome.runtime.lastError || !response) {
+      console.warn("[اسنپ‌شاپ] Bridge failed:", chrome.runtime.lastError?.message);
+      resolve(searchSnappShopDirect(productName));
+      return;
+    }
+    if (response.error) {
+      console.warn("[اسنپ‌شاپ] Bridge error:", response.error);
+      resolve([]);
+      return;
+    }
+    resolve(parseSnappShopItems(response.items, productName));
+  });
+}
+
+async function searchSnappShopDirect(productName) {
+  // Fallback: direct fetch (may get 403 from ArvanCloud on some requests)
+  try {
+    const query = encodeURIComponent(productName);
+    const url = `https://apix.snappshop.ir/search/v1?query=${query}&lat=35.6969675&lng=51.4080675`;
+    const response = await fetchWithTimeout(url, {
+      credentials: "include",
+      headers: { "Accept": "application/json", "Referer": "https://snappshop.ir/" }
+    });
+    if (!response.ok) { console.warn("[اسنپ‌شاپ] HTTP", response.status); return []; }
     const data = await response.json();
-    const items = data?.data?.products || data?.products || [];
-    
-    return items.map(item => {
-      const price = parseInt(String(item.price || item.selling_price || item.discounted_price || 0).replace(/[^\d]/g, "")) || 0;
-      if (price === 0) return null;
-      
-      return {
-        store: "اسنپ‌شاپ", storeColor: "#21D970",
-        name: item.title || item.title_fa || productName,
-        price, originalPrice: price, discount: 0,
-        url: item.url || `https://snapp.ir/shop/search?q=${query}`,
-        image: item.image || item.image_url || item.thumbnail || "",
-        rating: item.rating || 0, reviewCount: item.reviews_count || 0, availability: true,
-      };
-    }).filter(p => p !== null).slice(0, 5);
+    const items = data?.data?.items || data?.data?.products || data?.products || [];
+    return parseSnappShopItems(items, productName);
   } catch (e) {
-    console.warn("[اسنپ‌شاپ] خطا:", e.message);
+    console.warn("[اسنپ‌شاپ]", e.message);
     return [];
   }
+}
+
+function parseSnappShopItems(items, productName) {
+  if (!items || items.length === 0) return [];
+  const query = encodeURIComponent(productName);
+  return items.map(item => {
+    let priceVal = 0;
+    if (item.price && typeof item.price === 'object') {
+      priceVal = item.price.discounted_price || item.price.price || 0;
+    } else {
+      priceVal = item.price || item.selling_price || item.discounted_price || 0;
+    }
+    const price = parseInt(String(priceVal).replace(/[^0-9]/g, "")) || 0;
+    if (price === 0) return null;
+    
+    let imgUrl = "";
+    if (item.images && item.images.length > 0) {
+      imgUrl = item.images[0].url || item.images[0] || "";
+    } else {
+      imgUrl = item.image || item.image_url || item.thumbnail || "";
+    }
+    return {
+      store: "اسنپ‌شاپ", storeColor: "#21D970",
+      name: item.title || item.title_fa || productName,
+      price, originalPrice: price, discount: 0,
+      url: item.id ? `https://snappshop.ir/product/${item.id}` : `https://snappshop.ir/search?query=${query}`,
+      image: imgUrl,
+      rating: item.rating || 0, reviewCount: item.reviews_count || 0, availability: true,
+    };
+  }).filter(p => p !== null).slice(0, 5);
 }

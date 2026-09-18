@@ -126,30 +126,32 @@ function showResults(results) {
   const filtered = getFilteredResults();
   renderResults(filtered);
 
-  if (currentProduct && currentProduct.price && results.length > 0) {
-    const bestPrice = results[0].price;
-    const currentPrice = currentProduct.price;
+  if (savingsBannerEl) {
+    if (currentProduct && currentProduct.price && results.length > 0) {
+      const bestPrice = results[0].price;
+      const currentPrice = currentProduct.price;
 
-    savingsBannerEl.classList.remove("hidden");
-    const savingsIcon = savingsBannerEl.querySelector(".savings-icon");
-    
-    if (bestPrice < currentPrice) {
-      const saving = currentPrice - bestPrice;
-      const savingPct = Math.round((saving / currentPrice) * 100);
-      savingsBannerEl.style.color = "var(--error)";
-      savingsIcon.textContent = "💡";
-      savingsTextEl.innerHTML = `میتوانی ${formatPrice(saving)} (${savingPct}٪) ارزان‌تر بخری!`;
-    } else if (allResults.length > 0 && currentPrice === bestPrice) {
-      savingsBannerEl.style.color = "var(--success)";
-      savingsIcon.textContent = "✨";
-      savingsTextEl.textContent = "شما بهترین قیمت را پیدا کردید!";
+      savingsBannerEl.classList.remove("hidden");
+      const savingsIcon = savingsBannerEl.querySelector(".savings-icon");
+      
+      if (bestPrice < currentPrice) {
+        const saving = currentPrice - bestPrice;
+        const savingPct = Math.round((saving / currentPrice) * 100);
+        savingsBannerEl.style.color = "var(--error)";
+        if (savingsIcon) savingsIcon.textContent = "💡";
+        if (savingsTextEl) savingsTextEl.innerHTML = `میتوانی ${formatPrice(saving)} (${savingPct}٪) ارزان‌تر بخری!`;
+      } else if (allResults.length > 0 && currentPrice === bestPrice) {
+        savingsBannerEl.style.color = "var(--success)";
+        if (savingsIcon) savingsIcon.textContent = "✨";
+        if (savingsTextEl) savingsTextEl.textContent = "شما بهترین قیمت را پیدا کردید!";
+      } else {
+        savingsBannerEl.style.color = "var(--warning)";
+        if (savingsIcon) savingsIcon.textContent = "⚖️";
+        if (savingsTextEl) savingsTextEl.textContent = "این قیمت در بازار معمول است";
+      }
     } else {
-      savingsBannerEl.style.color = "var(--warning)";
-      savingsIcon.textContent = "⚖️";
-      savingsTextEl.textContent = "این قیمت در بازار معمول است";
+      savingsBannerEl.classList.add("hidden");
     }
-  } else {
-    savingsBannerEl.classList.add("hidden");
   }
 }
 
@@ -170,7 +172,8 @@ function getFilteredResults() {
       "emalls": "ایمالز",
       "basalam": "باسلام",
       "divar": "دیوار",
-      "sheypoor": "شیپور"
+      "sheypoor": "شیپور",
+      "snappshop": "اسنپ‌شاپ"
     };
     if (currentProduct && storeMap[btn.dataset.filter] === currentProduct.store) {
       btn.style.display = 'none';
@@ -187,7 +190,8 @@ function getFilteredResults() {
       "emalls": "ایمالز",
       "basalam": "باسلام",
       "divar": "دیوار",
-      "sheypoor": "شیپور"
+      "sheypoor": "شیپور",
+      "snappshop": "اسنپ‌شاپ"
     };
     filtered = filtered.filter(r => r.store === storeMap[activeFilter]);
   }
@@ -221,7 +225,7 @@ function renderResults(results) {
   }
 
   if (usedItems.length > 0) {
-    html += `<div class="condition-divider">♻️ بازار آزاد (احتمالاً کارکرده)</div>`;
+    
     html += usedItems.map((item) => generateCardHtml(item, false, true)).join("");
   }
 
@@ -250,21 +254,10 @@ const ratingHtml = item.rating > 0
 
   const bestBadge = "";
 
-  const usedBadge = isUsed 
-    ? `<span class="used-badge">بازار آزاد</span>`
-    : "";
+  const usedBadge = "";
 
-  const storeLogos = {
-    "دیجی‌کالا": "https://www.digikala.com/favicon.ico",
-    "ترب": "https://torob.com/favicon.ico",
-    "ایمالز": "https://emalls.ir/favicon.ico",
-    "باسلام": "https://basalam.com/favicon.ico",
-    "دیوار": "https://divar.ir/favicon.ico",
-    "شیپور": "https://www.sheypoor.com/favicon.ico",
-    "اسنپ‌شاپ": "https://snapp.ir/favicon.ico"
-  };
-  const logoUrl = storeLogos[item.store] || "";
-  const logoHtml = logoUrl ? `<img src="${logoUrl}" class="store-icon-img" onerror="this.style.display='none'" />` : "";
+
+
 
   return `
     <a href="${item.url}" target="_blank" class="result-card ${!item.availability ? "unavailable" : ""}" rel="noopener">
@@ -273,7 +266,7 @@ const ratingHtml = item.rating > 0
       <div class="result-content">
         <div class="result-name" title="${item.name}">${item.name}</div>
         <div class="result-store">
-          <span class="store-name ${storeClass}">${logoHtml}${item.store}</span>
+          <span class="store-name ${storeClass}">${item.store}${isUsed ? ' - کارکرده' : ''}</span>
           ${usedBadge}
           ${unavailableHtml}
         </div>

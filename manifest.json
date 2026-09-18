@@ -6,7 +6,8 @@
   "description": "بهترین قیمت محصول را در فروشگاه‌های ایرانی پیدا کنید",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "https://*.digikala.com/*",
@@ -24,7 +25,10 @@
     "https://api.divar.ir/*",
     "https://divar.ir/*",
     "https://*.sheypoor.com/*",
-    "https://www.sheypoor.com/*"
+    "https://www.sheypoor.com/*",
+    "https://*.snappshop.ir/*",
+    "https://snappshop.ir/*",
+    "https://apix.snappshop.ir/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -50,6 +54,16 @@
       ],
       "js": [
         "content/content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.snappshop.ir/*",
+        "https://snappshop.ir/*"
+      ],
+      "js": [
+        "content/snappshop_bridge.js"
       ],
       "run_at": "document_idle"
     }
