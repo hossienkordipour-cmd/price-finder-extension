@@ -1,0 +1,24 @@
+{
+  "name": "price-finder-extension",
+  "version": "1.0.0",
+  "main": "background.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hossienkordipour-cmd/price-finder-extension.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hossienkordipour-cmd/price-finder-extension/issues"
+  },
+  "homepage": "https://github.com/hossienkordipour-cmd/price-finder-extension#readme",
+  "description": "",
+  "dependencies": {
+    "chrome-launcher": "^1.2.1",
+    "puppeteer-core": "^25.11.0"
+  }
+}
