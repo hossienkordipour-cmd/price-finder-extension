@@ -7,6 +7,8 @@
 let currentProduct = null;
 let allResults = [];
 let activeFilter = "all";
+let currentTabId = null;
+let latestRequestId = 0;
 
 // DOM Elements
 const emptyState = document.getElementById("empty-state");
@@ -30,31 +32,51 @@ const savingsTextEl = document.getElementById("savings-text");
 // پیام‌های background
 // ==============================
 chrome.runtime.onMessage.addListener((message) => {
+  if (!Number.isInteger(currentTabId) || message.tabId !== currentTabId) return;
+  if (message.requestId && message.requestId < latestRequestId) return;
+
   if (message.type === "PRODUCT_UPDATED") {
+    latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product;
     showProduct(message.product);
     showLoading();
   }
 
   if (message.type === "RESULTS_UPDATED") {
+    latestRequestId = message.requestId || latestRequestId;
     allResults = message.results;
     showResults(message.results);
+  }
+
+  if (message.type === "SEARCH_FAILED") {
+    latestRequestId = message.requestId || latestRequestId;
+    showError();
   }
 });
 
 // ==============================
 // بارگذاری اولیه از storage
 // ==============================
-chrome.storage.local.get(["currentProduct", "searchResults", "isLoading"], (data) => {
-  if (data.currentProduct) {
-    currentProduct = data.currentProduct;
-    showProduct(data.currentProduct);
+chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, response => {
+  if (chrome.runtime.lastError || !response) {
+    showEmpty();
+    return;
+  }
 
-    if (data.isLoading) {
+  currentTabId = response.tabId;
+  const state = response.state;
+  if (state?.currentProduct) {
+    latestRequestId = state.requestId || 0;
+    currentProduct = state.currentProduct;
+    showProduct(state.currentProduct);
+
+    if (state.isLoading) {
       showLoading();
-    } else if (data.searchResults) {
-      allResults = data.searchResults;
-      showResults(data.searchResults);
+    } else if (state.error) {
+      showError();
+    } else if (state.searchResults) {
+      allResults = state.searchResults;
+      showResults(state.searchResults);
     }
   } else {
     showEmpty();
@@ -81,7 +103,8 @@ document.getElementById("retry-btn")?.addEventListener("click", () => {
     showLoading();
     chrome.runtime.sendMessage({
       type: "RETRY_SEARCH",
-      product: currentProduct
+      product: currentProduct,
+      tabId: currentTabId,
     });
   }
 });
@@ -97,6 +120,11 @@ function showEmpty() {
 function showLoading() {
   hide(emptyState, resultsState, errorState);
   show(loadingState);
+}
+
+function showError() {
+  hide(emptyState, loadingState, resultsState);
+  show(errorState);
 }
 
 function showProduct(product) {

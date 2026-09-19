@@ -532,13 +532,11 @@ body {
   gap: 8px;
 }
 
-.logo-text {
-  font-family: 'Plus Jakarta Sans', 'Yekan Bakh', sans-serif;
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: -0.5px;
-  color: #0A0A0A;
-  margin-top: 2px;
+.primary-logo {
+  display: block;
+  width: auto;
+  height: 32px;
+  object-fit: contain;
 }
 
 .header-badge {

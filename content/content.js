@@ -28,6 +28,15 @@
     return str;
   }
 
+  // A number without its unit is not safe: Digikala exposes both toman UI
+  // values and raw rial values in its SPA markup.
+  function parsePriceInTomans(value, unitText) {
+    const amount = parseInt(toEnglishDigits(value).replace(/[^0-9]/g, ""), 10);
+    if (!Number.isFinite(amount) || amount <= 0) return null;
+    return /(?:ریال|\birr\b|\brial\b)/i.test(unitText || "")
+      ? Math.round(amount / 10)
+      : amount;
+  }
   function cleanProductName(name) {
     if (!name) return null;
 
@@ -56,7 +65,7 @@
   }
 
   let lastUrl = location.href;
-  let lastDetectedName = null;
+  let lastDetectedKey = null;
   let detectionTimer = null;
 
 
@@ -64,7 +73,7 @@
   const observer = new MutationObserver(() => {
     if (location.href !== lastUrl) {
       lastUrl = location.href;
-      lastDetectedName = null; // Force reset on navigation
+      lastDetectedKey = null; // Force reset on navigation
       scheduleDetection();
     }
   });
@@ -97,7 +106,7 @@ let detectionInterval = null;
     if (widget) widget.remove();
     const popup = document.getElementById('piqo-popup-iframe');
     if (popup) popup.remove();
-    lastDetectedName = null; // reset state
+    lastDetectedKey = null; // reset state
   }
 
   // ==============================
@@ -125,9 +134,10 @@ let detectionInterval = null;
 
 if (product && product.name) {
       clearInterval(detectionInterval);
-      if (product.name !== lastDetectedName) {
+      const detectionKey = `${product.sourceUrl || location.href}|${product.name}|${product.price || ""}`;
+      if (detectionKey !== lastDetectedKey) {
         console.log("[قیمت‌یاب] محصول:", product.name);
-        lastDetectedName = product.name;
+        lastDetectedKey = detectionKey;
         chrome.runtime.sendMessage({ type: "PRODUCT_DETECTED", product });
         injectFloatingButton();
       } else {
@@ -196,14 +206,16 @@ if (product && product.name) {
         const els = document.querySelectorAll(sel);
         for (const el of els) {
           if (el && el.textContent) {
+            const unitText = `${el.textContent} ${el.parentElement?.textContent || ""}`;
+            const hasKnownUnit = /(?:تومان|ریال|\birr\b|\brial\b)/i.test(unitText);
             let txt = toEnglishDigits(el.textContent).replace(/[^0-9]/g, '');
             // Price must be at least 4 digits (1,000 تومان)
-            if (txt.length > 3) {
+            if (txt.length > 3 && hasKnownUnit) {
               const style = window.getComputedStyle(el);
               if (style.textDecoration.includes('line-through') || el.classList.contains('line-through') || el.closest('del, s, .line-through')) continue;
               if (el.tagName === 'H1' || el.closest('h1')) continue;
               
-              price = txt;
+              price = parsePriceInTomans(txt, unitText);
               break;
             }
           }
@@ -252,7 +264,7 @@ if (product && product.name) {
 
     return {
       name, image, source: "digikala", store: "دیجی‌کالا", sourceUrl: window.location.href,
-      price: price ? parseInt(toEnglishDigits(price).replace(/[^0-9]/g, "")) : null,
+      price: price ? parsePriceInTomans(price, "تومان") : null,
     };
   }
 
@@ -501,27 +513,32 @@ function injectFloatingButton() {
       .piqo-btn-core {
         width: 54px;
         height: 54px;
-        background: #18E6A3;
+        background: #22F498;
         border-radius: 27px 0 0 27px;
         box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.15);
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        transition: border-radius 0.3s ease, background 0.2s ease;
+        transition: border-radius 0.3s ease, filter 0.2s ease;
       }
       .piqo-btn-core:hover {
-        background: #2BF0B4;
+        filter: brightness(1.04);
       }
       /* When snapped to left */
       #piqo-widget-container.piqo-left .piqo-btn-core {
         border-radius: 0 27px 27px 0;
         box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.15);
       }
-      #piqo-widget-container.piqo-left .piqo-logo-svg {
+      .piqo-logo-mark {
+        display: block;
+        width: 21px;
+        height: 26px;
+      }
+      #piqo-widget-container.piqo-left .piqo-logo-mark {
         margin-left: -4px;
       }
-      #piqo-widget-container:not(.piqo-left) .piqo-logo-svg {
+      #piqo-widget-container:not(.piqo-left) .piqo-logo-mark {
         margin-right: -4px;
       }
       
@@ -564,9 +581,10 @@ function injectFloatingButton() {
         </svg>
       </div>
       <div class="piqo-btn-core" id="piqo-main-btn">
-        <svg class="piqo-logo-svg" width="28" height="28" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <rect x="6.5" y="6" width="3.5" height="12" rx="1.75" fill="#0A0A0A"/>
-          <circle cx="13" cy="11.5" r="3.5" fill="none" stroke="#0A0A0A" stroke-width="3.5"/>
+        <svg class="piqo-logo-mark" viewBox="0 0 510 626" aria-hidden="true" focusable="false">
+          <path fill="#081011" d="M0 239h145v314a72.5 72.5 0 0 1-145 0z"/>
+          <path fill="#081011" fill-rule="evenodd"
+            d="M0 239a255 239 0 1 0 510 0A255 239 0 1 0 0 239Zm150 0a105 105 0 1 1 210 0 105 105 0 1 1-210 0Z"/>
         </svg>
       </div>
       <div class="piqo-control piqo-grab" id="piqo-grab-right" style="display:none;">

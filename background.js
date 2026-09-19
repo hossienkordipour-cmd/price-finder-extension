@@ -1,4 +1,11 @@
-import { isPriceValid, hasRequiredEnglishTokens, getSimilarityScore } from './filters.js';
+import {
+  assessProductMatch,
+  buildSearchQuery,
+  isPriceValid,
+  normalizeProductText,
+} from './filters.js';
+import { parsePrice } from './price-utils.js';
+import { getTabStateKey, TabSearchRegistry } from './tab-state.js';
 
 // ==============================
 // Utility: Fetch with Timeout
@@ -29,26 +36,95 @@ chrome.action.onClicked.addListener((tab) => {
   chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_POPUP" }).catch(() => {});
 });
 
+const tabSearches = new TabSearchRegistry();
+
+function broadcastTabUpdate(type, tabId, payload = {}) {
+  chrome.runtime.sendMessage({ type, tabId, ...payload }).catch(() => {});
+}
+
+function persistTabState(tabId, state) {
+  return chrome.storage.local.set({ [getTabStateKey(tabId)]: state });
+}
+
+function startTabSearch(tabId, product) {
+  if (!Number.isInteger(tabId) || !product?.name) return;
+
+  const requestId = tabSearches.begin(tabId);
+
+  const loadingState = {
+    currentProduct: product,
+    searchResults: null,
+    isLoading: true,
+    error: null,
+    requestId,
+  };
+  persistTabState(tabId, loadingState);
+  broadcastTabUpdate("PRODUCT_UPDATED", tabId, { product, requestId });
+
+  searchPrices(product)
+    .then(results => {
+      if (!tabSearches.isCurrent(tabId, requestId)) return;
+      return persistTabState(tabId, {
+        currentProduct: product,
+        searchResults: results,
+        isLoading: false,
+        error: null,
+        requestId,
+      }).then(() => broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId }));
+    })
+    .catch(error => {
+      if (!tabSearches.isCurrent(tabId, requestId)) return;
+      const message = error?.message || "جستجو ناموفق بود";
+      return persistTabState(tabId, {
+        currentProduct: product,
+        searchResults: null,
+        isLoading: false,
+        error: message,
+        requestId,
+      }).then(() => broadcastTabUpdate("SEARCH_FAILED", tabId, { error: message, requestId }));
+    });
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "PRODUCT_DETECTED") {
-    chrome.storage.local.set({
-      currentProduct: message.product,
-      searchResults: null,
-      isLoading: true,
-    });
-
-    chrome.runtime.sendMessage({ type: "PRODUCT_UPDATED", product: message.product }).catch(() => {});
-
-    searchPrices(message.product).then(results => {
-      chrome.storage.local.set({ searchResults: results, isLoading: false });
-      chrome.runtime.sendMessage({ type: "RESULTS_UPDATED", results }).catch(() => {});
-    });
-
-    sendResponse({ success: true });
+    const tabId = sender.tab?.id;
+    startTabSearch(tabId, message.product);
+    sendResponse({ success: Number.isInteger(tabId), tabId });
+    return false;
   }
 
+  if (message.type === "RETRY_SEARCH") {
+    const tabId = sender.tab?.id ?? message.tabId;
+    startTabSearch(tabId, message.product);
+    sendResponse({ success: Number.isInteger(tabId), tabId });
+    return false;
+  }
 
-  return true;
+  if (message.type === "GET_TAB_STATE") {
+    const respondForTab = tabId => {
+      if (!Number.isInteger(tabId)) {
+        sendResponse({ tabId: null, state: null });
+        return;
+      }
+      chrome.storage.local.get([getTabStateKey(tabId)], data => {
+        sendResponse({ tabId, state: data[getTabStateKey(tabId)] || null });
+      });
+    };
+
+    if (Number.isInteger(sender.tab?.id)) {
+      respondForTab(sender.tab.id);
+    } else {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, tabs => respondForTab(tabs[0]?.id));
+    }
+    return true;
+  }
+
+  return false;
+});
+
+chrome.tabs.onRemoved.addListener(tabId => {
+  tabSearches.clear(tabId);
+  chrome.storage.local.remove(getTabStateKey(tabId));
 });
 
 // ==============================
@@ -57,20 +133,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function searchPrices(product) {
   console.log("[قیمت‌یاب] جستجوی اولیه:", product.name);
 
-  // ساده‌سازی هوشمند نام برای جستجو
-  let searchName = product.name;
-  
-  // اگر اسم خیلی طولانیه، بخش‌های کلیدی رو نگه می‌داریم
-  const words = searchName.split(/\s+/);
-  if (words.length > 6) {
-    // گرفتن کلمات انگلیسی (مدل‌ها)
-    const englishWords = words.filter(w => /[a-zA-Z]/.test(w));
-    // گرفتن ۳ کلمه اول فارسی (معمولا نوع محصول و برند مثل "لپ تاپ اپل")
-    const persianWords = words.filter(w => !/[a-zA-Z]/.test(w)).slice(0, 3);
-    
-    // ترکیب کلمات فارسی و حداکثر ۳ کلمه انگلیسی مهم
-    searchName = [...persianWords, ...englishWords.slice(0, 3)].join(" ");
-  }
+  const searchName = buildSearchQuery(product.name);
 
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
 
@@ -96,41 +159,34 @@ async function searchPrices(product) {
   });
 
   
-  // اعمال فیلترهای هوشمند Phia
-  let finalResults = [];
+  const finalResults = [];
   results.forEach(r => {
-    // اسنپ‌شاپ — فیلتر قیمت کافیه (API نتایج هدفمند برمیگردونه)
-    if (r.store === "اسنپ‌شاپ") {
-      if (product.price && !isPriceValid(product.price, r.price)) return;
-      finalResults.push(r);
-      return;
-    }
-    
-    // ۱. فیلتر قیمت (اگه قیمت اصلی رو داریم)
-    if (product.price && !isPriceValid(product.price, r.price)) {
+    const isUsed = r.condition === "used" || ["دیوار", "شیپور"].includes(r.store);
+    if (!isUsed && product.price && !isPriceValid(product.price, r.price)) {
       console.log(`[حذف - قیمت] ${r.name} (${r.price} vs ${product.price})`);
       return;
     }
-    
-    // ۲. فیلتر کلمات انگلیسی (مثل مدل گوشی یا حافظه)
-    if (!hasRequiredEnglishTokens(product.name, r.name)) {
-      console.log(`[حذف - نامرتبط] ${r.name}`);
-      return;
-    }
-    
-    // ۳. فیلتر شباهت نام
-    const sim = getSimilarityScore(product.name, r.name);
-    if (sim < 0.25) { // حداقل ۲۵ درصد کلمات اصلی باید در نتیجه باشد
-      console.log(`[حذف - شباهت کم] ${r.name} (نمره: ${sim.toFixed(2)})`);
-      return;
-    }
-    
-    finalResults.push(r);
 
+    const match = assessProductMatch(product.name, r.name);
+    if (!match.accepted) {
+      console.log(`[حذف - تطبیق] ${r.name} (نمره: ${match.score.toFixed(2)}، ${match.reasons.join(",")})`);
+      return;
+    }
+    finalResults.push({ ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" });
   });
 
-  finalResults.sort((a, b) => a.price - b.price);
-  return finalResults;
+  const uniqueResults = [...new Map(finalResults.map(item => [
+    `${item.store}|${normalizeProductText(item.name)}|${item.price}`,
+    item,
+  ])).values()];
+
+  uniqueResults.sort((a, b) =>
+    Number(b.availability) - Number(a.availability)
+    || Number(a.condition === "used") - Number(b.condition === "used")
+    || b.matchScore - a.matchScore
+    || a.price - b.price
+  );
+  return uniqueResults;
 }
 
 // ==============================
@@ -149,8 +205,8 @@ async function searchDigikala(productName) {
   return products.slice(0, 8).map(item => {
     const v = item.default_variant;
     // دیجی‌کالا ریال میده ÷ ۱۰ = تومان
-    const price = Math.round((v?.price?.selling_price || 0) / 10);
-    const originalPrice = Math.round((v?.price?.rrp_price || v?.price?.selling_price || 0) / 10);
+    const price = parsePrice(v?.price?.selling_price, "IRR");
+    const originalPrice = parsePrice(v?.price?.rrp_price || v?.price?.selling_price, "IRR");
     const image = item.images?.main?.url?.[0] || item.images?.list?.[0]?.url?.[0] || "";
 
     return {
@@ -190,7 +246,7 @@ async function searchTorob(productName) {
 
   return results.slice(0, 6).map(item => {
     // قیمت مستقیم تومانه در ترب
-    const price = item.price || 0;
+    const price = parsePrice(item.price, item.price_text || "TOMAN");
     const image = item.image_url || item.media_urls?.[0]?.url || "";
     const url = item.web_client_absolute_url
       ? `https://torob.com${item.web_client_absolute_url}`
@@ -235,7 +291,7 @@ async function searchEmalls(productName) {
       const img = block.match(/src="(https?:\/\/[^"]+\.(jpg|png|webp)[^"]*)"/i)?.[1];
 
       if (name && priceText) {
-        const price = parseInt(priceText.replace(/,/g, ""));
+        const price = parsePrice(priceText, "TOMAN");
         if (price > 0) {
           results.push({
             store: "ایمالز", storeColor: "#F5A623",
@@ -277,7 +333,7 @@ async function searchBasalam(productName) {
       if (!Array.isArray(items) || items.length === 0) continue;
 
       return items.slice(0, 5).map(item => {
-        const price = parseInt(String(item.price || item.sell_price || 0).replace(/[^\d]/g, "")) || 0;
+        const price = parsePrice(item.price || item.sell_price || 0, item.currency || item.currency_code || "TOMAN");
         return {
           store: "باسلام", storeColor: "#8B5CF6",
           name: item.name || item.title || productName,
@@ -329,9 +385,7 @@ async function searchDivar(productName) {
         return null;
       }
       
-      const persianNums = {'۰':'0','۱':'1','۲':'2','۳':'3','۴':'4','۵':'5','۶':'6','۷':'7','۸':'8','۹':'9'};
-      const normalized = priceText.replace(/[۰-۹]/g, d => persianNums[d] || d);
-      const price = parseInt(normalized.replace(/[^0-9]/g, "")) || 0;
+      const price = parsePrice(priceText, "TOMAN");
       if (price === 0) return null;
 
       const token = item.action?.payload?.token || item.token;
@@ -342,7 +396,7 @@ async function searchDivar(productName) {
         price, originalPrice: price, discount: 0,
         url: token ? `https://divar.ir/v/${token}` : `https://divar.ir/s/iran?q=${encodeURIComponent(productName)}`,
         image: item.image_url || "",
-        rating: 0, reviewCount: 0, availability: true,
+        rating: 0, reviewCount: 0, availability: true, condition: "used",
       };
     }).filter(p => p !== null).slice(0, 5);
   } catch (e) {
@@ -385,7 +439,7 @@ async function searchSheypoor(productName) {
       const amountStr = String(priceObj.amount || "");
       if (amountStr.includes("توافقی") || amountStr.includes("معاوضه") || amountStr === "") return null;
       
-      const price = parseInt(amountStr.replace(/[^0-9]/g, "")) || 0;
+      const price = parsePrice(amountStr, priceObj.currency || priceObj.unit || "TOMAN");
       if (price === 0) return null;
       
       // تصویر در attributes.images.thumbnails است
@@ -397,7 +451,7 @@ async function searchSheypoor(productName) {
         price, originalPrice: price, discount: 0,
         url: attributes.url || `https://www.sheypoor.com/search?q=${query}`,
         image: imgUrl,
-        rating: 0, reviewCount: 0, availability: true,
+        rating: 0, reviewCount: 0, availability: true, condition: "used",
       };
     }).filter(p => p !== null).slice(0, 5);
   } catch (e) {
@@ -505,7 +559,7 @@ function parseSnappShopItems(items, productName) {
     } else {
       priceVal = item.price || item.selling_price || item.discounted_price || 0;
     }
-    const price = parseInt(String(priceVal).replace(/[^0-9]/g, "")) || 0;
+    const price = parsePrice(priceVal, item.currency || item.currency_code || item.price?.currency || "TOMAN");
     if (price === 0) return null;
     
     let imgUrl = "";
