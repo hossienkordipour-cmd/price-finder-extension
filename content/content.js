@@ -11,11 +11,25 @@
   // ==============================
 
 
-  function getAbsoluteUrl(url) {
+  function getAbsoluteUrl(value) {
+    const url = typeof value === "object" ? value?.url || value?.contentUrl || value?.src : value;
     if (!url) return null;
     if (url.startsWith('//')) return 'https:' + url;
     if (url.startsWith('/')) return window.location.origin + url;
     return url;
+  }
+
+  function getImageFromElement(element) {
+    if (!element) return null;
+    const srcSet = element.getAttribute("srcset") || element.getAttribute("data-srcset") || "";
+    const firstSrcSetUrl = srcSet.split(",")[0]?.trim().split(/\s+/)[0];
+    return getAbsoluteUrl(
+      element.currentSrc
+      || element.getAttribute("src")
+      || element.getAttribute("data-src")
+      || element.getAttribute("data-lazy-src")
+      || firstSrcSetUrl
+    );
   }
 
   function toEnglishDigits(str) {
@@ -30,10 +44,13 @@
 
   // A number without its unit is not safe: Digikala exposes both toman UI
   // values and raw rial values in its SPA markup.
-  function parsePriceInTomans(value, unitText) {
+  function parsePriceInTomans(value, unitText, fallbackUnit = "TOMAN") {
     const amount = parseInt(toEnglishDigits(value).replace(/[^0-9]/g, ""), 10);
     if (!Number.isFinite(amount) || amount <= 0) return null;
-    return /(?:ریال|\birr\b|\brial\b)/i.test(unitText || "")
+    const explicitUnit = String(unitText || "");
+    const hasExplicitUnit = /(?:تومان|ریال|\birr\b|\birt\b|\brial\b|\btoman\b)/i.test(explicitUnit);
+    const resolvedUnit = hasExplicitUnit ? explicitUnit : fallbackUnit;
+    return /(?:ریال|\birr\b|\brial\b)/i.test(resolvedUnit || "")
       ? Math.round(amount / 10)
       : amount;
   }
@@ -182,13 +199,25 @@ if (product && product.name) {
       }
     } catch {}
 
+    if (!image || !image.includes("/digikala-products/")) {
+      const gallerySelectors = [
+        '[data-testid="product-image"] img',
+        '[data-cro="pdp-main-image"] img',
+        'picture img[src*="/digikala-products/"]',
+        'img[src*="/digikala-products/"]',
+        'img[srcset*="/digikala-products/"]'
+      ];
+      for (const selector of gallerySelectors) {
+        const candidate = getImageFromElement(document.querySelector(selector));
+        if (candidate?.includes("/digikala-products/")) {
+          image = candidate;
+          break;
+        }
+      }
+    }
+
     if (!image) {
       image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
-    }
-    
-    if (!image) {
-      const galleryImg = document.querySelector('img[src*="dkstatics-public"]');
-      if (galleryImg) image = getAbsoluteUrl(galleryImg.src);
     }
 
     if (!price) {
@@ -285,9 +314,11 @@ if (product && product.name) {
         const d = JSON.parse(ld.textContent);
         const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : d;
         if (p) {
-          const o = p.offers;
-          const rawPrice = o?.price || o?.lowPrice || (Array.isArray(o) ? (o[0]?.price || o[0]?.lowPrice) : null);
-          if (rawPrice) price = parseInt(toEnglishDigits(rawPrice).replace(/[^0-9]/g, ""));
+          const offer = Array.isArray(p.offers) ? p.offers[0] : p.offers;
+          const rawPrice = offer?.price || offer?.lowPrice;
+          const priceUnit = offer?.priceCurrency || offer?.priceSpecification?.priceCurrency;
+          // Torob's structured price is commonly IRR even though the page shows toman.
+          if (rawPrice) price = parsePriceInTomans(rawPrice, priceUnit, "IRR");
         }
       }
     } catch {}

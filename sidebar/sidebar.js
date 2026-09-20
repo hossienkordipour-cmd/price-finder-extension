@@ -38,6 +38,7 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "PRODUCT_UPDATED") {
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product;
+    allResults = [];
     showProduct(message.product);
     showLoading();
     requestSearch(false);
@@ -46,6 +47,7 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "SEARCH_STARTED") {
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product;
+    allResults = [];
     showProduct(message.product);
     showLoading();
   }
@@ -148,6 +150,42 @@ function showError() {
   show(errorState);
 }
 
+function setCurrentProductImage(candidates) {
+  const urls = [...new Set((candidates || []).filter(url => typeof url === "string" && url.trim()))];
+  let index = 0;
+
+  const loadNext = () => {
+    if (index >= urls.length) {
+      productImageEl.style.display = "none";
+      productImageEl.removeAttribute("src");
+      return;
+    }
+    productImageEl.style.display = "block";
+    productImageEl.src = urls[index++];
+  };
+
+  productImageEl.onload = () => {
+    productImageEl.style.display = "block";
+  };
+  productImageEl.onerror = loadNext;
+  loadNext();
+}
+
+function refreshCurrentProductImage(results = []) {
+  if (!currentProduct) return;
+
+  const sameStoreImage = results.find(item =>
+    item.store === currentProduct.store && item.image
+  )?.image;
+  const firstResultImage = results.find(item => item.image)?.image;
+  const pageImages = [currentProduct.image, ...(currentProduct.imageCandidates || [])];
+  const candidates = currentProduct.source === "digikala"
+    ? [sameStoreImage, ...pageImages, firstResultImage]
+    : [...pageImages, sameStoreImage, firstResultImage];
+
+  setCurrentProductImage(candidates);
+}
+
 function showProduct(product) {
   show(currentProductEl);
   productNameEl.textContent = product.name || "محصول ناشناخته";
@@ -160,17 +198,13 @@ function showProduct(product) {
     productPriceEl.textContent = "";
   }
 
-  if (product.image) {
-    productImageEl.src = product.image;
-    productImageEl.style.display = "block";
-  } else {
-    productImageEl.style.display = "none";
-  }
+  refreshCurrentProductImage(allResults);
 }
 
 function showResults(results) {
   hide(emptyState, loadingState, errorState);
   show(resultsState);
+  refreshCurrentProductImage(results);
 
   const filtered = getFilteredResults();
   renderResults(filtered);

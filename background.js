@@ -358,8 +358,11 @@ async function searchTorob(productName) {
   const results = data?.results || [];
 
   return results.slice(0, 6).map(item => {
-    // قیمت مستقیم تومانه در ترب
-    const price = parsePrice(item.price, item.price_text || "TOMAN");
+    // Prefer Torob's displayed price. In some responses the raw numeric field
+    // is rial while price_text contains the correct user-facing toman value.
+    const priceTextHasNumber = /[0-9۰-۹٠-٩]/.test(item.price_text || "");
+    const priceSource = priceTextHasNumber ? item.price_text : item.price;
+    const price = parsePrice(priceSource, item.price_text, "TOMAN");
     const image = item.image_url || item.media_urls?.[0]?.url || "";
     const url = item.web_client_absolute_url
       ? `https://torob.com${item.web_client_absolute_url}`
@@ -448,7 +451,12 @@ async function searchBasalam(productName) {
       if (!Array.isArray(items) || items.length === 0) continue;
 
       return items.slice(0, 5).map(item => {
-        const price = parsePrice(item.price || item.sell_price || 0, item.currency || item.currency_code || "TOMAN");
+        // Basalam returns its numeric price in rial and usually omits the unit.
+        const price = parsePrice(
+          item.price || item.sell_price || 0,
+          item.currency || item.currency_code,
+          "IRR"
+        );
         return {
           store: "باسلام", storeColor: "#8B5CF6",
           name: item.name || item.title || productName,
@@ -556,7 +564,8 @@ async function searchSheypoor(productName) {
       const amountStr = String(priceObj.amount || "");
       if (amountStr.includes("توافقی") || amountStr.includes("معاوضه") || amountStr === "") return null;
       
-      const price = parsePrice(amountStr, priceObj.currency || priceObj.unit || "TOMAN");
+      // Respect Sheypoor's explicit unit; numeric prices without a unit are rial.
+      const price = parsePrice(amountStr, priceObj.currency || priceObj.unit, "IRR");
       if (price === 0) return null;
       
       // تصویر در attributes.images.thumbnails است

@@ -12,7 +12,7 @@ export function toLatinDigits(value) {
 export function getCurrencyUnit(value) {
   const text = String(value ?? "").toLowerCase();
   if (/(?:ریال|\birr\b|\brial)/.test(text)) return "IRR";
-  if (/(?:تومان|\btoman|\btomans)/.test(text)) return "TOMAN";
+  if (/(?:تومان|\birt\b|\btoman|\btomans)/.test(text)) return "TOMAN";
   return null;
 }
 
@@ -22,7 +22,10 @@ export function toTomans(value, unit) {
   return unit === "IRR" ? Math.round(amount / 10) : amount;
 }
 
-export function parsePrice(value, declaredUnit = null) {
-  const unit = getCurrencyUnit(declaredUnit) || getCurrencyUnit(value) || "TOMAN";
+export function parsePrice(value, declaredUnit = null, fallbackUnit = "TOMAN") {
+  const unit = getCurrencyUnit(declaredUnit)
+    || getCurrencyUnit(value)
+    || getCurrencyUnit(fallbackUnit)
+    || "TOMAN";
   return toTomans(value, unit);
 }
