@@ -6,22 +6,47 @@ import {
 } from './filters.js';
 import { parsePrice } from './price-utils.js';
 import { getTabStateKey, TabSearchRegistry } from './tab-state.js';
+import {
+  beginApiRequest,
+  clearApiLogs,
+  completeApiRequest,
+  failApiRequest,
+  logApiCache,
+  logApiResults,
+  readApiLogs,
+} from './api-logger.js';
+import { SearchResultCache } from './search-cache.js';
 
 // ==============================
 // Utility: Fetch with Timeout
 // ==============================
 async function fetchWithTimeout(resource, options = {}) {
-  const { timeout = 6000 } = options;
+  const {
+    timeout = 6000,
+    logStore = "نامشخص",
+    logOperation = "search",
+    ...fetchOptions
+  } = options;
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
+  const logContext = beginApiRequest({
+    store: logStore,
+    url: resource,
+    method: fetchOptions.method || "GET",
+    operation: logOperation,
+  });
   try {
     const response = await fetch(resource, {
-      ...options,
+      ...fetchOptions,
       signal: controller.signal  
     });
+    completeApiRequest(logContext, response);
     clearTimeout(id);
     return response;
   } catch (error) {
+    failApiRequest(logContext, error, {
+      timedOut: error?.name === "AbortError",
+    });
     clearTimeout(id);
     throw error;
   }
@@ -37,6 +62,8 @@ chrome.action.onClicked.addListener((tab) => {
 });
 
 const tabSearches = new TabSearchRegistry();
+const searchCache = new SearchResultCache(chrome.storage.local);
+const inFlightSearches = new Map();
 
 function broadcastTabUpdate(type, tabId, payload = {}) {
   chrome.runtime.sendMessage({ type, tabId, ...payload }).catch(() => {});
@@ -46,7 +73,41 @@ function persistTabState(tabId, state) {
   return chrome.storage.local.set({ [getTabStateKey(tabId)]: state });
 }
 
-function startTabSearch(tabId, product) {
+function getProductKey(product) {
+  return `${product?.source || product?.store || ""}|${product?.sourceUrl || ""}|${normalizeProductText(product?.name || "")}`;
+}
+
+async function registerDetectedProduct(tabId, product) {
+  if (!Number.isInteger(tabId) || !product?.name) return;
+
+  const stateKey = getTabStateKey(tabId);
+  const data = await chrome.storage.local.get([stateKey]);
+  const currentState = data[stateKey];
+  const productKey = getProductKey(product);
+
+  if (currentState?.productKey === productKey) {
+    await persistTabState(tabId, { ...currentState, currentProduct: product });
+    broadcastTabUpdate("PRODUCT_METADATA_UPDATED", tabId, {
+      product,
+      requestId: currentState.requestId,
+    });
+    return;
+  }
+
+  const requestId = tabSearches.begin(tabId);
+  await persistTabState(tabId, {
+    currentProduct: product,
+    productKey,
+    searchResults: null,
+    isLoading: false,
+    error: null,
+    requestId,
+    updatedAt: Date.now(),
+  });
+  broadcastTabUpdate("PRODUCT_UPDATED", tabId, { product, requestId });
+}
+
+function startTabSearch(tabId, product, options = {}) {
   if (!Number.isInteger(tabId) || !product?.name) return;
 
   const requestId = tabSearches.begin(tabId);
@@ -57,11 +118,13 @@ function startTabSearch(tabId, product) {
     isLoading: true,
     error: null,
     requestId,
+    productKey: getProductKey(product),
+    updatedAt: Date.now(),
   };
   persistTabState(tabId, loadingState);
-  broadcastTabUpdate("PRODUCT_UPDATED", tabId, { product, requestId });
+  broadcastTabUpdate("SEARCH_STARTED", tabId, { product, requestId });
 
-  searchPrices(product)
+  searchPrices(product, options)
     .then(results => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       return persistTabState(tabId, {
@@ -70,6 +133,8 @@ function startTabSearch(tabId, product) {
         isLoading: false,
         error: null,
         requestId,
+        productKey: getProductKey(product),
+        updatedAt: Date.now(),
       }).then(() => broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId }));
     })
     .catch(error => {
@@ -81,6 +146,8 @@ function startTabSearch(tabId, product) {
         isLoading: false,
         error: message,
         requestId,
+        productKey: getProductKey(product),
+        updatedAt: Date.now(),
       }).then(() => broadcastTabUpdate("SEARCH_FAILED", tabId, { error: message, requestId }));
     });
 }
@@ -88,14 +155,21 @@ function startTabSearch(tabId, product) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "PRODUCT_DETECTED") {
     const tabId = sender.tab?.id;
-    startTabSearch(tabId, message.product);
+    registerDetectedProduct(tabId, message.product);
+    sendResponse({ success: Number.isInteger(tabId), tabId });
+    return false;
+  }
+
+  if (message.type === "START_SEARCH") {
+    const tabId = sender.tab?.id ?? message.tabId;
+    startTabSearch(tabId, message.product, { force: false });
     sendResponse({ success: Number.isInteger(tabId), tabId });
     return false;
   }
 
   if (message.type === "RETRY_SEARCH") {
     const tabId = sender.tab?.id ?? message.tabId;
-    startTabSearch(tabId, message.product);
+    startTabSearch(tabId, message.product, { force: true });
     sendResponse({ success: Number.isInteger(tabId), tabId });
     return false;
   }
@@ -119,6 +193,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "GET_API_LOGS") {
+    readApiLogs().then(logs => sendResponse({ logs }));
+    return true;
+  }
+
+  if (message.type === "CLEAR_API_LOGS") {
+    clearApiLogs().then(() => sendResponse({ success: true }));
+    return true;
+  }
+
   return false;
 });
 
@@ -130,7 +214,34 @@ chrome.tabs.onRemoved.addListener(tabId => {
 // ==============================
 // جستجوی موازی همه فروشگاه‌ها
 // ==============================
-async function searchPrices(product) {
+async function searchPrices(product, options = {}) {
+  const cacheKey = normalizeProductText(buildSearchQuery(product.name));
+
+  if (!options.force) {
+    const cached = await searchCache.get(cacheKey);
+    if (cached) {
+      logApiCache("cache-hit", cacheKey, cached.results.length);
+      return cached.results;
+    }
+  }
+
+  if (inFlightSearches.has(cacheKey)) {
+    logApiCache("in-flight-hit", cacheKey);
+    return inFlightSearches.get(cacheKey);
+  }
+
+  const searchPromise = searchPricesFromStores(product)
+    .then(async results => {
+      await searchCache.set(cacheKey, results);
+      return results;
+    })
+    .finally(() => inFlightSearches.delete(cacheKey));
+
+  inFlightSearches.set(cacheKey, searchPromise);
+  return searchPromise;
+}
+
+async function searchPricesFromStores(product) {
   console.log("[قیمت‌یاب] جستجوی اولیه:", product.name);
 
   const searchName = buildSearchQuery(product.name);
@@ -151,10 +262,10 @@ async function searchPrices(product) {
   const names = ["دیجی‌کالا", "ترب", "ایمالز", "باسلام", "دیوار", "شیپور", "اسنپ‌شاپ"];
   searches.forEach((s, i) => {
     if (s.status === "fulfilled") {
-      console.log(`[${names[i]}] ✅ ${s.value.length} نتیجه`);
+      logApiResults(names[i], s.value.length);
       results.push(...s.value);
     } else {
-      console.warn(`[${names[i]}] ❌`, s.reason?.message || s.reason);
+      logApiResults(names[i], 0, { error: s.reason?.message || String(s.reason) });
     }
   });
 
@@ -195,6 +306,7 @@ async function searchPrices(product) {
 async function searchDigikala(productName) {
   const query = encodeURIComponent(productName);
   const response = await fetchWithTimeout(`https://api.digikala.com/v1/search/?q=${query}&page=1`, {
+    logStore: "دیجی‌کالا",
     headers: { "Accept": "application/json" }
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -232,6 +344,7 @@ async function searchTorob(productName) {
   const url = `https://api.torob.com/v4/base-product/search/?q=${query}&source=next_desktop`;
 
   const response = await fetchWithTimeout(url, {
+    logStore: "ترب",
     headers: {
       "Accept": "application/json",
       "Referer": "https://torob.com/",
@@ -270,6 +383,7 @@ async function searchEmalls(productName) {
   const query = encodeURIComponent(productName);
   try {
     const response = await fetchWithTimeout(`https://www.emalls.ir/search.aspx?keyword=${query}`, {
+      logStore: "ایمالز",
       headers: {
         "Accept": "text/html",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
@@ -322,6 +436,7 @@ async function searchBasalam(productName) {
   for (const url of endpoints) {
     try {
       const response = await fetchWithTimeout(url, {
+        logStore: "باسلام",
         headers: {
           "Accept": "application/json"
         }
@@ -358,6 +473,7 @@ async function searchDivar(productName) {
   try {
     const url = "https://api.divar.ir/v8/postlist/w/search";
     const response = await fetchWithTimeout(url, {
+      logStore: "دیوار",
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -414,6 +530,7 @@ async function searchSheypoor(productName) {
     const url = `https://www.sheypoor.com/api/v10.0.0/search?q=${query}`;
     
     const response = await fetchWithTimeout(url, {
+      logStore: "شیپور",
       credentials: "omit",
       headers: { "Accept": "application/json" }
     });
@@ -515,18 +632,37 @@ async function searchSnappShop(productName) {
 }
 
 function sendToSnappBridge(tabId, productName, resolve, isNewTab) {
+  const query = encodeURIComponent(productName);
+  const apiUrl = `https://apix.snappshop.ir/search/v1?query=${query}&lat=35.6969675&lng=51.4080675`;
+  const logContext = beginApiRequest({
+    store: "اسنپ‌شاپ",
+    url: apiUrl,
+    method: "GET",
+    operation: "bridge-search",
+  });
   chrome.tabs.sendMessage(tabId, { type: "SNAPPSHOP_SEARCH", query: productName }, (response) => {
     if (chrome.runtime.lastError || !response) {
-      console.warn("[اسنپ‌شاپ] Bridge failed:", chrome.runtime.lastError?.message);
+      failApiRequest(logContext, new Error(chrome.runtime.lastError?.message || "Bridge failed"));
       resolve(searchSnappShopDirect(productName));
       return;
     }
     if (response.error) {
-      console.warn("[اسنپ‌شاپ] Bridge error:", response.error);
+      failApiRequest(logContext, new Error(response.error), {
+        status: response.apiMeta?.status || 0,
+        remoteDurationMs: response.apiMeta?.durationMs,
+      });
       resolve([]);
       return;
     }
-    resolve(parseSnappShopItems(response.items, productName));
+    const parsedItems = parseSnappShopItems(response.items, productName);
+    completeApiRequest(logContext, {
+      ok: true,
+      status: response.apiMeta?.status || 200,
+    }, {
+      remoteDurationMs: response.apiMeta?.durationMs,
+      resultCount: parsedItems.length,
+    });
+    resolve(parsedItems);
   });
 }
 
@@ -536,6 +672,8 @@ async function searchSnappShopDirect(productName) {
     const query = encodeURIComponent(productName);
     const url = `https://apix.snappshop.ir/search/v1?query=${query}&lat=35.6969675&lng=51.4080675`;
     const response = await fetchWithTimeout(url, {
+      logStore: "اسنپ‌شاپ",
+      logOperation: "direct-search",
       credentials: "include",
       headers: { "Accept": "application/json", "Referer": "https://snappshop.ir/" }
     });

@@ -6,6 +6,7 @@
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "SNAPPSHOP_SEARCH") {
+    const startedAt = Date.now();
     const query = encodeURIComponent(message.query);
     const url = `https://apix.snappshop.ir/search/v1?query=${query}&lat=35.6969675&lng=51.4080675`;
 
@@ -18,18 +19,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     })
     .then(res => {
       if (!res.ok) {
-        sendResponse({ error: `HTTP ${res.status}` });
+        sendResponse({
+          error: `HTTP ${res.status}`,
+          apiMeta: { status: res.status, durationMs: Date.now() - startedAt },
+        });
         return;
       }
-      return res.json();
+      return res.json().then(data => ({ data, status: res.status }));
     })
-    .then(data => {
-      if (!data) return;
+    .then(result => {
+      if (!result) return;
+      const { data, status } = result;
       const items = data?.data?.items || data?.data?.products || data?.products || [];
-      sendResponse({ items });
+      sendResponse({
+        items,
+        apiMeta: { status, durationMs: Date.now() - startedAt },
+      });
     })
     .catch(err => {
-      sendResponse({ error: err.message });
+      sendResponse({
+        error: err.message,
+        apiMeta: { status: 0, durationMs: Date.now() - startedAt },
+      });
     });
 
     return true; // Keep channel open for async

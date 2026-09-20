@@ -40,6 +40,19 @@ chrome.runtime.onMessage.addListener((message) => {
     currentProduct = message.product;
     showProduct(message.product);
     showLoading();
+    requestSearch(false);
+  }
+
+  if (message.type === "SEARCH_STARTED") {
+    latestRequestId = message.requestId || latestRequestId;
+    currentProduct = message.product;
+    showProduct(message.product);
+    showLoading();
+  }
+
+  if (message.type === "PRODUCT_METADATA_UPDATED") {
+    currentProduct = message.product;
+    showProduct(message.product);
   }
 
   if (message.type === "RESULTS_UPDATED") {
@@ -77,6 +90,9 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, response => {
     } else if (state.searchResults) {
       allResults = state.searchResults;
       showResults(state.searchResults);
+    } else {
+      showLoading();
+      requestSearch(false);
     }
   } else {
     showEmpty();
@@ -101,13 +117,18 @@ document.querySelectorAll(".filter-btn").forEach(btn => {
 document.getElementById("retry-btn")?.addEventListener("click", () => {
   if (currentProduct) {
     showLoading();
-    chrome.runtime.sendMessage({
-      type: "RETRY_SEARCH",
-      product: currentProduct,
-      tabId: currentTabId,
-    });
+    requestSearch(true);
   }
 });
+
+function requestSearch(force) {
+  if (!currentProduct || !Number.isInteger(currentTabId)) return;
+  chrome.runtime.sendMessage({
+    type: force ? "RETRY_SEARCH" : "START_SEARCH",
+    product: currentProduct,
+    tabId: currentTabId,
+  });
+}
 
 // ==============================
 // توابع نمایش

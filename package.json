@@ -4,7 +4,7 @@
   "type": "module",
   "main": "background.js",
   "scripts": {
-    "test": "node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs"
+    "test": "node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs"
   },
   "repository": {
     "type": "git",
