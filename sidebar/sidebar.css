@@ -760,6 +760,7 @@ body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 /* Hide product name in grid view for the clean aesthetic */
@@ -769,7 +770,7 @@ body {
 
 /* Store name styling */
 .results-list.grid-view .result-store {
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .results-list.grid-view .store-name {
@@ -790,6 +791,7 @@ body {
   justify-content: flex-start;
   flex-wrap: wrap;
   gap: 6px;
+  margin-top: 0;
 }
 
 .results-list.grid-view .result-price {

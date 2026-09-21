@@ -744,3 +744,63 @@ chrome.runtime.onMessage.addListener((message) => {
     togglePiqoPopup(isLeft);
   }
 });
+
+// Page bridge for stores that render search results in the browser.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type !== "STORE_PAGE_SEARCH") return;
+
+  const toEnglishDigits = (value) => String(value || "").replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+  const parseToman = (value) => {
+    const n = Number(toEnglishDigits(value).replace(/[^0-9]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const absolute = (value) => {
+    if (!value) return "";
+    try { return new URL(value, location.origin).href; } catch { return ""; }
+  };
+  const waitFor = (selector, timeout = 12000) => new Promise(resolve => {
+    const started = Date.now();
+    const check = () => {
+      const nodes = document.querySelectorAll(selector);
+      if (nodes.length || Date.now() - started >= timeout) return resolve(nodes);
+      setTimeout(check, 250);
+    };
+    check();
+  });
+  const collect = async () => {
+    if (message.store === "خانومی") {
+      const anchors = await waitFor('a[href^="/products/"]');
+      const seen = new Set();
+      return [...anchors].map(anchor => {
+        const url = absolute(anchor.getAttribute("href"));
+        if (!url || seen.has(url)) return null;
+        seen.add(url);
+        const name = anchor.querySelector("h3")?.innerText?.trim();
+        if (!name) return null;
+        const pricing = anchor.querySelector('[data-sentry-component="Pricing"]');
+        const current = pricing?.querySelector(".text-text-black")?.innerText || pricing?.innerText || "";
+        const price = parseToman(current);
+        if (!price) return null;
+        return { store: "خانومی", storeColor: "#E91E63", name, price, originalPrice: price, discount: 0, url, image: absolute(anchor.querySelector("img")?.src), rating: 0, reviewCount: 0, availability: true };
+      }).filter(Boolean).slice(0, 6);
+    }
+
+    const headings = await waitFor('a[href*="/product-"] h2');
+    const seen = new Set();
+    return [...headings].map(heading => {
+      const anchor = heading.closest("a");
+      const url = absolute(anchor?.getAttribute("href"));
+      if (!anchor || !url || seen.has(url)) return null;
+      seen.add(url);
+      const card = anchor.parentElement?.parentElement;
+      const text = card?.innerText || anchor.innerText || "";
+      const priceMatch = text.match(/([0-9۰-۹][0-9۰-۹,]*)\s*تومان/);
+      const price = parseToman(priceMatch?.[1]);
+      if (!price) return null;
+      return { store: "تکنولایف", storeColor: "#5B21B6", name: heading.innerText.trim(), price, originalPrice: price, discount: 0, url, image: absolute(card?.querySelector("img")?.src), rating: 0, reviewCount: 0, availability: true };
+    }).filter(Boolean).slice(0, 6);
+  };
+
+  collect().then(items => sendResponse({ items })).catch(() => sendResponse({ items: [] }));
+  return true;
+});

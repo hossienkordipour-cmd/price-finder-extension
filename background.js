@@ -256,10 +256,12 @@ async function searchPricesFromStores(product) {
     searchDivar(searchName),
     searchSheypoor(searchName),
     searchSnappShop(searchName),
+    searchKhanoumi(searchName),
+    searchTechnolife(searchName),
   ]);
 
   const results = [];
-  const names = ["دیجی‌کالا", "ترب", "ایمالز", "باسلام", "دیوار", "شیپور", "اسنپ‌شاپ"];
+  const names = ["دیجی‌کالا", "ترب", "ایمالز", "باسلام", "دیوار", "شیپور", "اسنپ‌شاپ", "خانومی", "تکنولایف"];
   searches.forEach((s, i) => {
     if (s.status === "fulfilled") {
       logApiResults(names[i], s.value.length);
@@ -298,6 +300,58 @@ async function searchPricesFromStores(product) {
     || a.price - b.price
   );
   return uniqueResults;
+}
+
+// ==============================
+// خانومی و تکنولایف — page bridge
+// ==============================
+function searchStorePage(store, url, timeoutMs = 18000) {
+  return new Promise((resolve) => {
+    chrome.tabs.create({ url, active: false }, (tab) => {
+      if (chrome.runtime.lastError || !tab?.id) return resolve([]);
+      const tabId = tab.id;
+      let settled = false;
+      const finish = (items) => {
+        if (settled) return;
+        settled = true;
+        chrome.tabs.onUpdated.removeListener(onUpdated);
+        chrome.tabs.remove(tabId).catch(() => {});
+        resolve(Array.isArray(items) ? items : []);
+      };
+      const askPage = () => {
+        chrome.tabs.sendMessage(tabId, { type: "STORE_PAGE_SEARCH", store }, (response) => {
+          if (chrome.runtime.lastError || !response) return finish([]);
+          finish(response.items || []);
+        });
+      };
+      const onUpdated = (updatedTabId, info) => {
+        if (updatedTabId === tabId && info.status === "complete") {
+          chrome.tabs.onUpdated.removeListener(onUpdated);
+          setTimeout(askPage, store === "خانومی" ? 1800 : 1200);
+        }
+      };
+      chrome.tabs.onUpdated.addListener(onUpdated);
+      setTimeout(() => finish([]), timeoutMs);
+    });
+  });
+}
+
+async function searchKhanoumi(productName) {
+  const query = encodeURIComponent(productName);
+  const url = `https://www.khanoumi.com/search?query=${query}`;
+  const context = beginApiRequest({ store: "خانومی", url, method: "GET", operation: "page-search" });
+  const items = await searchStorePage("خانومی", url);
+  completeApiRequest(context, { ok: true, status: 200 }, { resultCount: items.length });
+  return items;
+}
+
+async function searchTechnolife(productName) {
+  const query = encodeURIComponent(productName);
+  const url = `https://www.technolife.ir/product/list/search?keywords=${query}`;
+  const context = beginApiRequest({ store: "تکنولایف", url, method: "GET", operation: "page-search" });
+  const items = await searchStorePage("تکنولایف", url);
+  completeApiRequest(context, { ok: true, status: 200 }, { resultCount: items.length });
+  return items;
 }
 
 // ==============================

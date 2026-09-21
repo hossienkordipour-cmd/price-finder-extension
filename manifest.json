@@ -28,7 +28,10 @@
     "https://www.sheypoor.com/*",
     "https://*.snappshop.ir/*",
     "https://snappshop.ir/*",
-    "https://apix.snappshop.ir/*"
+    "https://apix.snappshop.ir/*",
+    "https://*.khanoumi.com/*",
+    "https://*.technolife.ir/*",
+    "https://*.technolife.com/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -50,7 +53,10 @@
         "https://divar.ir/*",
         "https://*.sheypoor.com/*",
         "https://sheypoor.com/*",
-        "https://www.sheypoor.com/*"
+        "https://www.sheypoor.com/*",
+        "https://*.khanoumi.com/*",
+        "https://*.technolife.ir/*",
+        "https://*.technolife.com/*"
       ],
       "js": [
         "content/content.js"

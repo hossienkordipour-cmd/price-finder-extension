@@ -39,6 +39,8 @@ chrome.runtime.onMessage.addListener((message) => {
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product;
     allResults = [];
+    activeFilter = "all";
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
     showProduct(message.product);
     showLoading();
     requestSearch(false);
@@ -48,6 +50,8 @@ chrome.runtime.onMessage.addListener((message) => {
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product;
     allResults = [];
+    activeFilter = "all";
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
     showProduct(message.product);
     showLoading();
   }
@@ -238,6 +242,31 @@ function showResults(results) {
   }
 }
 
+function updateFilterButtons() {
+  const storeMap = {
+    digikala: "دیجی‌کالا", torob: "ترب", emalls: "ایمالز", basalam: "باسلام",
+    divar: "دیوار", sheypoor: "شیپور", snappshop: "اسنپ‌شاپ",
+    khanoumi: "خانومی", technolife: "تکنولایف"
+  };
+  const availableStores = new Set(allResults.map(result => result.store));
+  const currentStore = currentProduct?.store;
+
+  document.querySelectorAll(".filter-btn").forEach(btn => {
+    if (btn.dataset.filter === "all") {
+      btn.style.display = "inline-block";
+      return;
+    }
+    const store = storeMap[btn.dataset.filter];
+    const visible = availableStores.has(store) && store !== currentStore;
+    btn.style.display = visible ? "inline-block" : "none";
+  });
+
+  const activeButton = document.querySelector(`.filter-btn[data-filter="${activeFilter}"]`);
+  if (activeFilter !== "all" && (!activeButton || activeButton.style.display === "none")) {
+    activeFilter = "all";
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
+  }
+}
 function getFilteredResults() {
   let filtered = allResults;
   
@@ -246,24 +275,8 @@ function getFilteredResults() {
     filtered = filtered.filter(item => item.store !== currentProduct.store);
   }
 
-  // Hide filter button for current store
-  document.querySelectorAll(".filter-btn").forEach(btn => {
-    if (btn.dataset.filter === "all") return;
-    const storeMap = {
-      "digikala": "دیجی‌کالا",
-      "torob": "ترب",
-      "emalls": "ایمالز",
-      "basalam": "باسلام",
-      "divar": "دیوار",
-      "sheypoor": "شیپور",
-      "snappshop": "اسنپ‌شاپ"
-    };
-    if (currentProduct && storeMap[btn.dataset.filter] === currentProduct.store) {
-      btn.style.display = 'none';
-    } else {
-      btn.style.display = 'inline-block';
-    }
-  });
+  // فقط فروشگاه‌هایی که نتیجه معتبر دارند نمایش داده می‌شوند
+  updateFilterButtons();
 
   // 2. Apply active filter
   if (activeFilter !== "all") {
@@ -274,7 +287,9 @@ function getFilteredResults() {
       "basalam": "باسلام",
       "divar": "دیوار",
       "sheypoor": "شیپور",
-      "snappshop": "اسنپ‌شاپ"
+      "snappshop": "اسنپ‌شاپ",
+      "khanoumi": "خانومی",
+      "technolife": "تکنولایف"
     };
     filtered = filtered.filter(r => r.store === storeMap[activeFilter]);
   }
@@ -379,6 +394,8 @@ function getStoreClass(storeName) {
   if (storeName === "باسلام") return "basalam";
   if (storeName === "دیوار") return "divar";
   if (storeName === "شیپور") return "sheypoor";
+  if (storeName === "خانومی") return "khanoumi";
+  if (storeName === "تکنولایف") return "technolife";
   return "";
 }
 
