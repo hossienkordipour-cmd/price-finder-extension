@@ -505,7 +505,8 @@ body {
 .result-price-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end; /* Align to the left in RTL */
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
   direction: rtl;

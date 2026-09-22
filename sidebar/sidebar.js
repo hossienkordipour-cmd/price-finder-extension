@@ -353,9 +353,7 @@ function generateCardHtml(item, isBest, isUsed = false) {
     ? `<span class="result-original-price">${formatPrice(item.originalPrice)}</span>`
     : "";
 
-const ratingHtml = item.rating > 0
-    ? `<div class="result-rating"><span style="color:#FDB022; margin-left:4px;">★</span><span>${item.rating.toFixed(1)}</span> <span style="color:#9EA2AA; font-size:10px; margin-right:4px;">(${item.reviewCount})</span></div>`
-    : "";
+const ratingHtml = "";
 
   const unavailableHtml = !item.availability
     ? `<span class="unavailable-label">ناموجود</span>`
@@ -395,7 +393,7 @@ const ratingHtml = item.rating > 0
 function formatPrice(price) {
   if (!price) return "—";
   const num = new Intl.NumberFormat("fa-IR").format(price);
-  return `<span dir="rtl">${num} <span class="currency-label">تومان</span></span>`;
+  return `<span dir="rtl" style="white-space: nowrap;">${num} <span class="currency-label">تومان</span></span>`;
 }
 
 function getStoreClass(storeName) {
