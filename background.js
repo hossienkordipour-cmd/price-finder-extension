@@ -124,7 +124,14 @@ function startTabSearch(tabId, product, options = {}) {
   persistTabState(tabId, loadingState);
   broadcastTabUpdate("SEARCH_STARTED", tabId, { product, requestId });
 
-  searchPrices(product, options)
+  searchPrices(product, {
+    ...options,
+    onProgress: (partialResults) => {
+      if (!tabSearches.isCurrent(tabId, requestId)) return;
+      persistTabState(tabId, { ...loadingState, searchResults: partialResults });
+      broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId });
+    }
+  })
     .then(results => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       return persistTabState(tabId, {
@@ -221,16 +228,19 @@ async function searchPrices(product, options = {}) {
     const cached = await searchCache.get(cacheKey);
     if (cached) {
       logApiCache("cache-hit", cacheKey, cached.results.length);
+      if (options.onProgress) options.onProgress(cached.results);
       return cached.results;
     }
   }
 
   if (inFlightSearches.has(cacheKey)) {
     logApiCache("in-flight-hit", cacheKey);
-    return inFlightSearches.get(cacheKey);
+    const res = await inFlightSearches.get(cacheKey);
+    if (options.onProgress) options.onProgress(res);
+    return res;
   }
 
-  const searchPromise = searchPricesFromStores(product)
+  const searchPromise = searchPricesFromStores(product, options.onProgress)
     .then(async results => {
       await searchCache.set(cacheKey, results);
       return results;
@@ -241,65 +251,54 @@ async function searchPrices(product, options = {}) {
   return searchPromise;
 }
 
-async function searchPricesFromStores(product) {
+async function searchPricesFromStores(product, onProgress) {
   console.log("[قیمت‌یاب] جستجوی اولیه:", product.name);
-
   const searchName = buildSearchQuery(product.name);
-
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
 
-  const searches = await Promise.allSettled([
-    searchDigikala(searchName),
-    searchTorob(searchName),
-    searchEmalls(searchName),
-    searchBasalam(searchName),
-    searchDivar(searchName),
-    searchSheypoor(searchName),
-    searchSnappShop(searchName),
-    searchKhanoumi(searchName),
-    searchTechnolife(searchName),
-  ]);
+  const promises = [
+    { name: "دیجی‌کالا", p: searchDigikala(searchName) },
+    { name: "ترب", p: searchTorob(searchName) },
+    { name: "ایمالز", p: searchEmalls(searchName) },
+    { name: "باسلام", p: searchBasalam(searchName) },
+    { name: "دیوار", p: searchDivar(searchName) },
+    { name: "شیپور", p: searchSheypoor(searchName) },
+    { name: "اسنپ‌شاپ", p: searchSnappShop(searchName) },
+    { name: "خانومی", p: searchKhanoumi(searchName) },
+    { name: "تکنولایف", p: searchTechnolife(searchName) },
+  ];
 
-  const results = [];
-  const names = ["دیجی‌کالا", "ترب", "ایمالز", "باسلام", "دیوار", "شیپور", "اسنپ‌شاپ", "خانومی", "تکنولایف"];
-  searches.forEach((s, i) => {
-    if (s.status === "fulfilled") {
-      logApiResults(names[i], s.value.length);
-      results.push(...s.value);
-    } else {
-      logApiResults(names[i], 0, { error: s.reason?.message || String(s.reason) });
-    }
-  });
+  const allValidResults = [];
 
-  
-  const finalResults = [];
-  results.forEach(r => {
+  const filterAndScore = (r) => {
     const isUsed = r.condition === "used" || ["دیوار", "شیپور"].includes(r.store);
-    if (!isUsed && product.price && !isPriceValid(product.price, r.price)) {
-      console.log(`[حذف - قیمت] ${r.name} (${r.price} vs ${product.price})`);
-      return;
-    }
-
+    if (!isUsed && product.price && !isPriceValid(product.price, r.price)) return null;
     const match = assessProductMatch(product.name, r.name);
-    if (!match.accepted) {
-      console.log(`[حذف - تطبیق] ${r.name} (نمره: ${match.score.toFixed(2)}، ${match.reasons.join(",")})`);
-      return;
-    }
-    finalResults.push({ ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" });
-  });
+    if (!match.accepted) return null;
+    return { ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" };
+  };
 
-  const uniqueResults = [...new Map(finalResults.map(item => [
-    `${item.store}|${normalizeProductText(item.name)}|${item.price}`,
-    item,
-  ])).values()];
+  const sortAndDedupe = (results) => {
+    const unique = [...new Map(results.map(item => [item.store + "|" + normalizeProductText(item.name) + "|" + item.price, item])).values()];
+    unique.sort((a, b) => Number(b.availability) - Number(a.availability) || Number(a.condition === "used") - Number(b.condition === "used") || b.matchScore - a.matchScore || a.price - b.price);
+    return unique;
+  };
 
-  uniqueResults.sort((a, b) =>
-    Number(b.availability) - Number(a.availability)
-    || Number(a.condition === "used") - Number(b.condition === "used")
-    || b.matchScore - a.matchScore
-    || a.price - b.price
+  const wrappedPromises = promises.map(req => 
+    req.p.then(res => {
+      logApiResults(req.name, res.length);
+      const valid = res.map(filterAndScore).filter(Boolean);
+      allValidResults.push(...valid);
+      if (onProgress) onProgress(sortAndDedupe(allValidResults));
+      return valid;
+    }).catch(err => {
+      logApiResults(req.name, 0, { error: err.message });
+      return [];
+    })
   );
-  return uniqueResults;
+
+  await Promise.allSettled(wrappedPromises);
+  return sortAndDedupe(allValidResults);
 }
 
 // ==============================
