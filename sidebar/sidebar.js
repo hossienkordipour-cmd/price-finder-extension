@@ -378,8 +378,6 @@ const ratingHtml = "";
           ${unavailableHtml}
         </div>
         <div class="result-price-row">
-          ${discountBadge}
-          ${originalPrice}
           <span class="${priceClass}">${formatPrice(item.price)}</span>
         </div>
         ${ratingHtml}
