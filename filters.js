@@ -152,7 +152,8 @@ export function assessProductMatch(sourceName, targetName, isUsed = false) {
   }
 
   score = Math.max(0, Math.min(1, score));
-  const accepted = !hardMismatch && score >= 0.52;
+  const threshold = isUsed ? 0.38 : 0.52;
+  const accepted = !hardMismatch && score >= threshold;
   const confidence = score >= 0.78 ? "high" : score >= 0.52 ? "medium" : "low";
   return { accepted, score, confidence, reasons };
 }
