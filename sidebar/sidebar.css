@@ -290,8 +290,8 @@ body {
 
 .result-card:hover {
   border-color: var(--gray-300);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+  background: var(--gray-25);
 }
 
 .result-card.best-price {
