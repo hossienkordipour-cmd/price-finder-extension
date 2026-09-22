@@ -438,12 +438,13 @@ async function searchTorob(productName) {
 async function searchEmalls(productName) {
   const query = encodeURIComponent(productName);
   try {
-    const response = await fetchWithTimeout(`https://www.emalls.ir/search.aspx?keyword=${query}`, {
+    const url = `https://emalls.ir/لیست-قیمت/?Search=${query}`;
+    const response = await fetchWithTimeout(url, {
       logStore: "ایمالز",
       headers: {
         "Accept": "text/html",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0",
-        "Referer": "https://www.emalls.ir/"
+        "Referer": "https://emalls.ir/"
       }
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -451,14 +452,27 @@ async function searchEmalls(productName) {
     const html = await response.text();
     const results = [];
 
-    // استخراج اطلاعات محصولات از HTML
-    const itemPattern = /class="[^"]*ProductItem[^"]*"([\s\S]{1,3000}?)(?=(?:class="[^"]*ProductItem[^"]*"|<\/section|<\/div>|$))/gi;
-    for (const match of html.matchAll(itemPattern)) {
-      const block = match[1];
-      const name = block.match(/(?:title|alt)="([^"]{5,120})"/)?.[1];
-      const priceText = block.match(/([\d,]{5,})\s*تومان/)?.[1];
-      const urlPath = block.match(/href="(\/[^"]+)"/)?.[1];
-      const img = block.match(/src="(https?:\/\/[^"]+\.(jpg|png|webp)[^"]*)"/i)?.[1];
+    // Split HTML into product blocks
+    const blocks = html.split('class="item product-block"');
+    
+    // Skip the first chunk (header)
+    for (let i = 1; i < blocks.length; i++) {
+      const block = blocks[i];
+      
+      // Extract name from alt or title attributes within the block
+      const nameMatch = block.match(/(?:alt|title)="([^"]{5,150})"/i);
+      const name = nameMatch ? nameMatch[1].replace(/قیمت\s*/g, '').trim() : null;
+      
+      // Extract price (any number followed by تومان)
+      const priceText = block.match(/([\d,۰-۹]{5,})\s*(?:تومان)/)?.[1];
+      
+      // Extract URL (href starting with /)
+      const urlMatch = block.match(/href="(\/[^"]+)"/i);
+      const urlPath = urlMatch ? urlMatch[1] : null;
+      
+      // Extract image (src containing emalls.ir/files or similar)
+      const imgMatch = block.match(/src=["'](https?:\/\/[^"']+\.(?:jpg|png|webp|jpeg)[^"']*)["']/i);
+      const img = imgMatch ? imgMatch[1] : "";
 
       if (name && priceText) {
         const price = parsePrice(priceText, "TOMAN");
@@ -466,8 +480,8 @@ async function searchEmalls(productName) {
           results.push({
             store: "ایمالز", storeColor: "#F5A623",
             name, price, originalPrice: price, discount: 0,
-            url: urlPath ? `https://www.emalls.ir${urlPath}` : `https://www.emalls.ir/search.aspx?keyword=${query}`,
-            image: img || "", rating: 0, reviewCount: 0, availability: true,
+            url: urlPath ? `https://emalls.ir${urlPath}` : url,
+            image: img, rating: 0, reviewCount: 0, availability: true, condition: "new"
           });
         }
       }
