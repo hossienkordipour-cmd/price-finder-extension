@@ -314,9 +314,16 @@ function renderResults(results) {
 
   if (results.length === 0) {
     resultsListEl.innerHTML = `
-      <div style="text-align:center; padding:24px; color:#6B7280; font-size:12px;">
-        <div style="font-size:32px;margin-bottom:8px">🔍</div>
-        نتیجه‌ای یافت نشد
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; text-align: center; background: var(--gray-50); border: 1px dashed var(--gray-200); border-radius: 16px; margin-top: 12px;">
+        <div style="width: 48px; height: 48px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); margin-bottom: 16px;">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--gray-500)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            <line x1="8" y1="11" x2="14" y2="11"></line>
+          </svg>
+        </div>
+        <div style="font-size: 14px; font-weight: 700; color: var(--gray-900); margin-bottom: 4px;">فروشگاهی پیدا نشد</div>
+        <div style="font-size: 12px; color: var(--gray-500); line-height: 1.6;">این محصول در فروشگاه‌های دیگر موجود نیست یا نام آن متفاوت است.</div>
       </div>
     `;
     return;
