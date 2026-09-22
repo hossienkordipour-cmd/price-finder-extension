@@ -64,6 +64,12 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "RESULTS_UPDATED") {
     latestRequestId = message.requestId || latestRequestId;
     allResults = message.results;
+    
+    // Prevent "No results found" flash during partial updates
+    if (message.isPartial && (!allResults || allResults.length === 0)) {
+       return;
+    }
+    
     showResults(message.results);
   }
 
@@ -90,7 +96,12 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, response => {
     showProduct(state.currentProduct);
 
     if (state.isLoading) {
-      showLoading();
+      if (state.searchResults && state.searchResults.length > 0) {
+        allResults = state.searchResults;
+        showResults(state.searchResults);
+      } else {
+        showLoading();
+      }
     } else if (state.error) {
       showError();
     } else if (state.searchResults) {

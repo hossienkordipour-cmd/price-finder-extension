@@ -129,7 +129,7 @@ function startTabSearch(tabId, product, options = {}) {
     onProgress: (partialResults) => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       persistTabState(tabId, { ...loadingState, searchResults: partialResults });
-      broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId });
+      broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId, isPartial: true });
     }
   })
     .then(results => {
@@ -142,7 +142,7 @@ function startTabSearch(tabId, product, options = {}) {
         requestId,
         productKey: getProductKey(product),
         updatedAt: Date.now(),
-      }).then(() => broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId }));
+      }).then(() => broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId, isPartial: false }));
     })
     .catch(error => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
