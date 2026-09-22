@@ -346,7 +346,7 @@ function generateCardHtml(item, isBest, isUsed = false) {
   const priceClass = "result-price";
 
   const discountBadge = item.discount > 0
-    ? `<span class="result-discount">−${item.discount}٪</span>`
+    ? `<span class="result-discount">${item.discount}٪</span>`
     : "";
 
   const originalPrice = (item.originalPrice && item.originalPrice > item.price)
@@ -378,9 +378,9 @@ const ratingHtml = "";
           ${unavailableHtml}
         </div>
         <div class="result-price-row">
-          <span class="${priceClass}">${formatPrice(item.price)}</span>
-          ${originalPrice}
           ${discountBadge}
+          ${originalPrice}
+          <span class="${priceClass}">${formatPrice(item.price)}</span>
         </div>
         ${ratingHtml}
       </div>
