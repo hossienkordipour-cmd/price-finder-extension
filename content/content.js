@@ -361,19 +361,68 @@ if (product && product.name) {
   // عمومی (Schema.org)
   // ==============================
   function extractGeneric() {
-    const hasProduct =
-      !!document.querySelector('[itemtype*="schema.org/Product"]') ||
-      document.querySelector('meta[property="og:type"]')?.content?.includes("product");
+    let name = null;
+    let price = null;
+    let image = null;
 
-    if (!hasProduct) return null;
+    // 1. Try JSON-LD
+    try {
+      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const script of scripts) {
+        const data = JSON.parse(script.textContent);
+        
+        let p = null;
+        if (Array.isArray(data)) {
+          p = data.find(x => x["@type"] === "Product");
+        } else if (data["@graph"]) {
+          p = data["@graph"].find(x => x["@type"] === "Product");
+        } else if (data["@type"] === "Product") {
+          p = data;
+        }
 
-    let name = document.querySelector('[itemprop="name"]')?.textContent?.trim()
-      || document.querySelector('meta[property="og:title"]')?.content;
-    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+        if (p) {
+          if (p.name) name = p.name;
+          if (p.image) image = Array.isArray(p.image) ? p.image[0] : (typeof p.image === 'object' ? p.image.url : p.image);
+          
+          let offer = p.offers;
+          if (Array.isArray(p.offers)) offer = p.offers[0];
+          if (offer && (offer.price || offer.lowPrice)) {
+             price = parsePriceInTomans(offer.price || offer.lowPrice, offer.priceCurrency);
+          }
+          break;
+        }
+      }
+    } catch (e) {}
 
-    if (name) name = cleanProductName(name);
+    // 2. Try Open Graph / Microdata
+    const hasProductType = document.querySelector('meta[property="og:type"]')?.content?.includes("product");
+    
+    if (!name) name = document.querySelector('meta[property="og:title"]')?.content || document.querySelector('[itemprop="name"]')?.textContent?.trim() || document.querySelector("h1")?.textContent?.trim();
+    if (!image) image = document.querySelector('meta[property="og:image"]')?.content;
+    image = getAbsoluteUrl(image);
+    
+    if (!price) {
+       const metaPrice = document.querySelector('meta[property="product:price:amount"]')?.content;
+       const metaCurrency = document.querySelector('meta[property="product:price:currency"]')?.content;
+       if (metaPrice) price = parsePriceInTomans(metaPrice, metaCurrency);
+    }
+
     if (!name) return null;
-    return { name, image, source: "generic", store: "فروشگاه فعلی", sourceUrl: window.location.href, price: null };
+    name = cleanProductName(name);
+    if (!name || name.length < 3) return null;
+
+    // Ensure it's truly a product page (to avoid activating on random articles)
+    const isLikelyProduct = hasProductType || price > 0 || document.querySelector('[itemtype*="schema.org/Product"]');
+    if (!isLikelyProduct) return null;
+
+    return { 
+      name, 
+      image, 
+      source: "generic", 
+      store: window.location.hostname.replace("www.", ""), 
+      sourceUrl: window.location.href, 
+      price: price 
+    };
   }
 
   // ==============================

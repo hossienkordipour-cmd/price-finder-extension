@@ -40,23 +40,7 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.digikala.com/*",
-        "https://digikala.com/*",
-        "https://*.torob.com/*",
-        "https://torob.com/*",
-        "https://*.emalls.ir/*",
-        "https://emalls.ir/*",
-        "https://www.emalls.ir/*",
-        "https://*.basalam.com/*",
-        "https://basalam.com/*",
-        "https://*.divar.ir/*",
-        "https://divar.ir/*",
-        "https://*.sheypoor.com/*",
-        "https://sheypoor.com/*",
-        "https://www.sheypoor.com/*",
-        "https://*.khanoumi.com/*",
-        "https://*.technolife.ir/*",
-        "https://*.technolife.com/*"
+        "<all_urls>"
       ],
       "js": [
         "content/content.js"
