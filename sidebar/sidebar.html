@@ -45,31 +45,34 @@
   </div>
 
   <!-- وضعیت خالی (قبل از شناسایی) -->
-  <div id="empty-state" class="state-container">
-    <div class="empty-icon">🛍️</div>
-    <p class="state-text">به صفحه محصولی بروید</p>
-    <p class="state-subtext">افزونه به‌طور خودکار بهترین قیمت را پیدا می‌کند</p>
+  <div id="empty-state" class="state-container" style="padding: 24px 16px; background: transparent;">
+    <div style="width: 64px; height: 64px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); margin-bottom: 20px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+    </div>
+    <h2 style="font-size: 16px; font-weight: 800; color: var(--gray-900); margin-bottom: 8px;">جستجوی مستقیم کالا</h2>
+    <p style="font-size: 13px; color: var(--gray-500); margin-bottom: 24px; text-align: center; line-height: 1.6;">نام محصول مورد نظرتان را بنویسید تا بهترین قیمت بازار را پیدا کنیم.</p>
+    
+    <form id="manual-search-form" style="width: 100%; position: relative; margin-bottom: 32px;">
+      <input type="text" id="manual-search-input" placeholder="مثال: گوشی سامسونگ S24" autocomplete="off" class="manual-search-input" />
+      <button type="submit" class="manual-search-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      </button>
+    </form>
+
     <div class="supported-stores">
       <div class="section-label">فروشگاه‌های پشتیبانی‌شده</div>
-      <div class="store-list">
-        <div class="store-item">
-          <span class="store-dot" style="background:#E42112"></span>
-          <span>دیجی‌کالا</span>
-        </div>
-        <div class="store-item">
-          <span class="store-dot" style="background:#00A95C"></span>
-          <span>ترب</span>
-        </div>
-        <div class="store-item">
-          <span class="store-dot" style="background:#F5A623"></span>
-          <span>ایمالز</span>
-        </div>
-        <div class="store-item">
-          <span class="store-dot" style="background:#6E4BEC"></span>
-          <span>باسلام</span>
-        </div>
+      <div class="store-list" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; flex-direction: row;">
+        <span class="store-tag">دیجی‌کالا</span>
+        <span class="store-tag">ترب</span>
+        <span class="store-tag">ایمالز</span>
+        <span class="store-tag">باسلام</span>
+        <span class="store-tag">دیوار</span>
       </div>
     </div>
+  </div>
   </div>
 
   <!-- نتایج -->

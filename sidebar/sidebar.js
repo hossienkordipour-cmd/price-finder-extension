@@ -519,3 +519,37 @@ if (filterBarContainer) {
       </div>
     `;
   }
+
+// Manual Search Logic
+const searchForm = document.getElementById("manual-search-form");
+const searchInput = document.getElementById("manual-search-input");
+if (searchForm && searchInput) {
+  searchForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const query = searchInput.value.trim();
+    if (!query || !Number.isInteger(currentTabId)) return;
+
+    // Fake manual product
+    const manualProduct = {
+      name: query,
+      price: null,
+      image: null,
+      store: "جستجوی دستی",
+      source: "manual"
+    };
+    
+    currentProduct = manualProduct;
+    allResults = [];
+    activeFilter = "all";
+    document.querySelectorAll(".filter-btn").forEach(b => b.classList.toggle("active", b.dataset.filter === "all"));
+    
+    showProduct(manualProduct);
+    showLoading();
+    
+    chrome.runtime.sendMessage({
+      type: "START_SEARCH",
+      product: manualProduct,
+      tabId: currentTabId
+    });
+  });
+}
