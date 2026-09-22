@@ -106,7 +106,7 @@ function conflictingExplicitSets(sourceSet, targetSet) {
   return sourceSet.size > 0 && targetSet.size > 0 && !intersects(sourceSet, targetSet);
 }
 
-export function assessProductMatch(sourceName, targetName) {
+export function assessProductMatch(sourceName, targetName, isUsed = false) {
   if (!sourceName || !targetName) return { accepted: false, score: 0, confidence: "low", reasons: ["missing-name"] };
 
   const source = extractProductFeatures(sourceName);

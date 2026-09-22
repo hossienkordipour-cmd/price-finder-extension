@@ -273,7 +273,7 @@ async function searchPricesFromStores(product, onProgress) {
   const filterAndScore = (r) => {
     const isUsed = r.condition === "used" || ["دیوار", "شیپور"].includes(r.store);
     if (!isUsed && product.price && !isPriceValid(product.price, r.price)) return null;
-    const match = assessProductMatch(product.name, r.name);
+    const match = assessProductMatch(product.name, r.name, isUsed);
     if (!match.accepted) return null;
     return { ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" };
   };
