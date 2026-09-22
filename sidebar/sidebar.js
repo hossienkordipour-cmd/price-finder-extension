@@ -70,7 +70,7 @@ chrome.runtime.onMessage.addListener((message) => {
        return;
     }
     
-    showResults(message.results);
+    showResults(message.results, message.isPartial);
   }
 
   if (message.type === "SEARCH_FAILED") {
@@ -98,7 +98,7 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, response => {
     if (state.isLoading) {
       if (state.searchResults && state.searchResults.length > 0) {
         allResults = state.searchResults;
-        showResults(state.searchResults);
+        showResults(state.searchResults, true);
       } else {
         showLoading();
       }
@@ -216,13 +216,13 @@ function showProduct(product) {
   refreshCurrentProductImage(allResults);
 }
 
-function showResults(results) {
+function showResults(results, isLoading = false) {
   hide(emptyState, loadingState, errorState);
   show(resultsState);
   refreshCurrentProductImage(results);
 
   const filtered = getFilteredResults();
-  renderResults(filtered);
+  renderResults(filtered, isLoading);
 
   if (savingsBannerEl) {
     if (currentProduct && currentProduct.price && results.length > 0) {
@@ -309,7 +309,7 @@ function getFilteredResults() {
 }
 
 
-function renderResults(results) {
+function renderResults(results, isLoading = false) {
   resultsCountEl.textContent = `${results.length} نتیجه`;
 
   if (results.length === 0) {
@@ -345,6 +345,10 @@ function renderResults(results) {
     html += usedItems.map((item) => generateCardHtml(item, false, true)).join("");
   }
 
+    if (isLoading) {
+    html += generateSkeletonHtml();
+    html += generateSkeletonHtml();
+  }
   resultsListEl.innerHTML = html;
 }
 
@@ -500,3 +504,18 @@ if (filterBarContainer) {
     }
   }, true);
 }
+
+  function generateSkeletonHtml() {
+    return `
+      <div class="skeleton-card">
+        <div class="skeleton-img"></div>
+        <div class="skeleton-content">
+          <div class="skeleton-line" style="width: 70%;"></div>
+          <div class="skeleton-line" style="width: 40%;"></div>
+          <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+            <div class="skeleton-line" style="width: 30%;"></div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
