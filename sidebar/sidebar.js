@@ -412,6 +412,7 @@ function getStoreClass(storeName) {
   if (storeName === "باسلام") return "basalam";
   if (storeName === "دیوار") return "divar";
   if (storeName === "مسترکالا") return "masterkala";
+  if (storeName.includes("دیجی‌پی")) return "digipay";
   if (storeName === "شیپور") return "sheypoor";
   if (storeName === "خانومی") return "khanoumi";
   if (storeName === "تکنولایف") return "technolife";
