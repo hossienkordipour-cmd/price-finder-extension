@@ -411,6 +411,7 @@ function getStoreClass(storeName) {
   if (storeName === "ایمالز") return "emalls";
   if (storeName === "باسلام") return "basalam";
   if (storeName === "دیوار") return "divar";
+  if (storeName === "مسترکالا") return "masterkala";
   if (storeName === "شیپور") return "sheypoor";
   if (storeName === "خانومی") return "khanoumi";
   if (storeName === "تکنولایف") return "technolife";
