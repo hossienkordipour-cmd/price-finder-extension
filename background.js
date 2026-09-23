@@ -311,6 +311,13 @@ async function searchDigipay(query) {
       const urlMatch = linkMatch ? linkMatch[1] : '';
       const storeDomain = linkMatch ? linkMatch[2] : '';
       
+      const logoSnippetMatch = block.match(/class="store-logo([^]*?)<\/div>/i);
+      let storeFa = '';
+      if (logoSnippetMatch) {
+        const altMatch = logoSnippetMatch[1].match(/alt=(?:"([^"]+)"|([^\r\n]+))/i);
+        if (altMatch) storeFa = (altMatch[1] || altMatch[2]).trim();
+      }
+      
       const altMatch = block.match(/class="blend-multiply"[\s\S]*?alt="([^"]+)"/i) || block.match(/alt="([^"]+)"[\s\S]*?class="blend-multiply"/i);
       const name = altMatch ? altMatch[1].replace(/<\/?em>/g, '') : '';
       
@@ -323,7 +330,7 @@ async function searchDigipay(query) {
       if (price <= 0 || !name || !urlMatch) continue;
       
       results.push({
-        store: storeDomain.split('.')[0],
+        store: storeFa || storeDomain.split('.')[0],
         name: name,
         price: price, // Digipay returns Toman natively
         url: urlMatch,
