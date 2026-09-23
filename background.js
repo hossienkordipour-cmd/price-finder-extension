@@ -323,7 +323,7 @@ async function searchDigipay(query) {
       if (price <= 0 || !name || !urlMatch) continue;
       
       results.push({
-        store: `دیجی‌پی (${storeDomain.replace('.com','').replace('.ir','')})`,
+        store: storeDomain.split('.')[0],
         name: name,
         price: price, // Digipay returns Toman natively
         url: urlMatch,
