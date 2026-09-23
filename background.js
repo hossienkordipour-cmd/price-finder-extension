@@ -273,6 +273,7 @@ async function searchMasterKala(query) {
       if (price <= 0) continue;
       
       const isAvailable = item.stock_status === "موجود" || parseInt(item.quantity) > 0;
+      if (!isAvailable) continue;
       
       results.push({
         store: "مسترکالا",
@@ -367,6 +368,7 @@ async function searchPricesFromStores(product, onProgress) {
   const allValidResults = [];
 
   const filterAndScore = (r) => {
+    if (r.availability === false) return null;
     const isUsed = r.condition === "used" || ["دیوار", "شیپور"].includes(r.store);
     if (!isUsed && product.price && !isPriceValid(product.price, r.price)) return null;
     const match = assessProductMatch(product.name, r.name, isUsed);
