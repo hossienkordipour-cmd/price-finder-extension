@@ -280,7 +280,7 @@ async function searchPricesFromStores(product, onProgress) {
 
   const sortAndDedupe = (results) => {
     const unique = [...new Map(results.map(item => [item.store + "|" + normalizeProductText(item.name) + "|" + item.price, item])).values()];
-    unique.sort((a, b) => Number(b.availability) - Number(a.availability) || Number(a.condition === "used") - Number(b.condition === "used") || b.matchScore - a.matchScore || a.price - b.price);
+    unique.sort((a, b) => Number(b.availability) - Number(a.availability) || Number(a.condition === "used") - Number(b.condition === "used") || a.price - b.price || b.matchScore - a.matchScore);
     return unique;
   };
 
