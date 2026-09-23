@@ -175,7 +175,13 @@ if (product && product.name) {
 
     // H1 is the most reliable source for current SPA state
     const h1 = document.querySelector("h1");
-    if (h1) name = h1.textContent.trim();
+    if (h1) {
+      // Sometimes H1 has badges like <span>ناموجود</span>شامپو...
+      // This causes textContent to return "ناموجودشامپو"
+      name = h1.textContent.trim();
+      // Remove known problematic badges at the start of the string
+      name = name.replace(/^(ناموجود|توقف تولید)\s*/, '');
+    }
     
     if (!name) {
       const og = document.querySelector('meta[property="og:title"]')?.content;
