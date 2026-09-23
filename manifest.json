@@ -31,7 +31,11 @@
     "https://apix.snappshop.ir/*",
     "https://*.khanoumi.com/*",
     "https://*.technolife.ir/*",
-    "https://*.technolife.com/*"
+    "https://*.technolife.com/*",
+    "https://*.mydigipay.com/*",
+    "https://www.mydigipay.com/*",
+    "https://*.masterkala.com/*",
+    "https://masterkala.com/*"
   ],
   "background": {
     "service_worker": "background.js",
