@@ -174,7 +174,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-top: 0;
+  padding-top: 2px;
 }
 .card-title {
   font-size: 13px;
@@ -190,13 +190,12 @@ body {
 .card-store {
   font-size: 11px;
   color: #777777;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
 }
 .card-bottom {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-top: auto;
 }
 .card-discount {
   font-size: 10px;
