@@ -474,3 +474,11 @@ body {
 .dropdown-item.selected:hover {
   background: #F0F0F0;
 }
+
+#results-list {
+  transition: opacity 0.15s ease-out, transform 0.15s ease-out;
+}
+#results-list.switching-layout {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
