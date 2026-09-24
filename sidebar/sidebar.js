@@ -133,7 +133,7 @@ function generateCardHtml(item, isBase = false) {
     }
   }
 
-  const storeText = item.condition === "used" ? `${item.store} - دست دوم` : `${item.store} - نو`;
+  const storeText = item.condition === "used" ? `${item.store} - کارکرده` : item.store;
 
   return `
     <a href="${item.url}" target="_blank" class="result-card">
