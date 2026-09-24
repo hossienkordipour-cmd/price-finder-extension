@@ -115,9 +115,20 @@ body {
   font-weight: 800;
   color: var(--text-dark);
 }
-.grid-icon {
-  color: var(--text-dark);
+.grid-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
+  color: var(--text-dark);
+}
+.grid-icon-btn:hover {
+  background: #E5E7EB;
 }
 
 /* Filters Row */
@@ -166,7 +177,7 @@ body {
 }
 .card-title {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-dark);
   margin-bottom: 4px;
   white-space: nowrap;
@@ -177,7 +188,7 @@ body {
 }
 .card-store {
   font-size: 11px;
-  color: var(--text-light);
+  color: #777777;
   margin-bottom: 12px;
 }
 .card-bottom {
@@ -197,12 +208,12 @@ body {
 .card-price span {
   font-size: 10px;
   font-weight: 400;
-  color: var(--text-light);
-  margin-right: 4px;
+  color: #909090;
+  margin-right: 2px;
 }
 .card-image-wrapper {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   border-radius: 12px;
   background: #F3F4F6;
   flex-shrink: 0;
@@ -243,8 +254,8 @@ body {
   animation: pulse 1.5s infinite;
 }
 .skeleton-img {
-  width: 72px;
-  height: 72px;
+  width: 80px;
+  height: 80px;
   background: #E5E7EB;
   border-radius: 12px;
   flex-shrink: 0;
