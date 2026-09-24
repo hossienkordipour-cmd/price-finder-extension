@@ -283,7 +283,7 @@ body {
 
 .results-list.grid-view .result-card {
   flex-direction: column;
-  padding: 8px; /* Tighter padding for grid */
+  padding: 4px; /* Tighter padding for grid */
   gap: 8px;     /* Distance from image to text */
   align-items: stretch;
 }
@@ -344,7 +344,7 @@ body {
 /* Skeleton adjustments for grid view */
 .results-list.grid-view .skeleton-card {
   flex-direction: column;
-  padding: 8px;
+  padding: 4px;
   gap: 8px;
   align-items: stretch;
 }
