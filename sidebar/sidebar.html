@@ -3,129 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src * data: blob:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self';" />
   <title>piqo</title>
   <link rel="stylesheet" href="sidebar.css" />
 </head>
 <body>
-  <!-- Header -->
-<!-- Header (LTR like Phia) -->
   <header class="header">
     <div class="header-logo">
-      <img class="primary-logo" src="primary-logo.png" width="66" height="32" alt="PIQO" />
+      <strong style="font-size: 18px; letter-spacing: -0.5px;">piqo</strong>
       <span class="header-badge">بتا</span>
     </div>
     <button id="popup-close-btn" class="header-close-btn">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
     </button>
   </header>
 
-<!-- محصول فعلی -->
-  <div id="current-product" class="current-product hidden">
-    <div class="product-card current">
-      <div class="current-product-main">
-        <img id="product-image" class="product-img" src="" alt="" onerror="this.style.display='none'" />
-        <div class="product-info">
-          <div id="product-store" class="current-store-name"></div>
-          <div id="product-name" class="product-name"></div> <!-- Hidden to match the clean design -->
-          <div id="product-price" class="product-price current-price"></div>
-        </div>
-      </div>
-  
-    </div>
-  </div>
+  <!-- Base Product -->
+  <div id="current-product" class="hidden"></div>
 
-  <!-- وضعیت loading -->
+  <!-- Loading -->
   <div id="loading-state" class="state-container hidden">
     <div class="spinner"></div>
-    <p class="state-text">در حال جستجو در فروشگاه‌ها...</p>
-    <div class="store-tags">
-      <span class="store-tag dk">دیجی‌کالا</span>
-      <span class="store-tag tr">ترب</span>
-      <span class="store-tag em">ایمالز</span>
-    </div>
+    <p style="font-size: 12px; color: var(--text-light);">در حال جستجو...</p>
   </div>
 
-  <!-- وضعیت خالی (قبل از شناسایی) -->
-  <div id="empty-state" class="state-container" style="padding: 24px 16px; background: transparent;">
-    <div style="width: 64px; height: 64px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); margin-bottom: 20px;">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--primary-dark)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="11" cy="11" r="8"></circle>
-        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-      </svg>
-    </div>
-    <h2 style="font-size: 16px; font-weight: 800; color: var(--gray-900); margin-bottom: 8px;">جستجوی مستقیم کالا</h2>
-    <p style="font-size: 13px; color: var(--gray-500); margin-bottom: 24px; text-align: center; line-height: 1.6;">نام محصول مورد نظرتان را بنویسید تا بهترین قیمت بازار را پیدا کنیم.</p>
-    
-    <form id="manual-search-form" style="width: 100%; position: relative; margin-bottom: 32px;">
-      <input type="text" id="manual-search-input" placeholder="مثال: گوشی سامسونگ S24" autocomplete="off" class="manual-search-input" />
+  <!-- Empty / Manual Search -->
+  <div id="empty-state" class="state-container">
+    <form id="manual-search-form" style="width: 100%; position: relative; margin-bottom: 24px;">
+      <input type="text" id="manual-search-input" placeholder="جستجوی کالا..." autocomplete="off" class="manual-search-input" />
       <button type="submit" class="manual-search-btn">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
       </button>
     </form>
-
-    <div class="supported-stores">
-      <div class="section-label">فروشگاه‌های پشتیبانی‌شده</div>
-      <div class="store-list" style="display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; flex-direction: row;">
-        <span class="store-tag">دیجی‌کالا</span>
-        <span class="store-tag">ترب</span>
-        <span class="store-tag">ایمالز</span>
-        <span class="store-tag">باسلام</span>
-        <span class="store-tag">دیوار</span>
-        <span class="store-tag">مسترکالا</span>
-        
-      </div>
-    </div>
-  </div>
   </div>
 
-  <!-- نتایج -->
+  <!-- Results Section -->
   <div id="results-state" class="hidden">
-    <div class="results-header">
-      <div class="results-title-group">
-        <span class="section-label">بهترین قیمت‌ها</span>
-        <span id="results-count" class="results-count"></span>
-      </div>
-      <div class="results-actions">
-        <button id="toggle-grid-btn" class="icon-btn" title="تغییر نما">
-          <!-- Grid Icon -->
-          <svg id="icon-grid" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
-          </svg>
-          <!-- List Icon (Hidden initially) -->
-          <svg id="icon-list" class="hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line>
-            <line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line>
-          </svg>
-        </button>
-      </div>
+    <div class="section-header">
+      <h2 class="section-title">محصولات مشابه</h2>
+      <svg class="grid-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect>
+      </svg>
     </div>
 
-    <!-- فیلتر -->
-    <div class="filter-bar">
-      <button class="filter-btn active" data-filter="all">همه</button>
-      <button class="filter-btn" data-filter="digikala">دیجی‌کالا</button>
-      <button class="filter-btn" data-filter="torob">ترب</button>
-      <button class="filter-btn" data-filter="emalls">ایمالز</button>
-      <button class="filter-btn" data-filter="basalam">باسلام</button>
-      <button class="filter-btn" data-filter="divar">دیوار</button>
-      <button class="filter-btn" data-filter="sheypoor">شیپور</button>
-      <button class="filter-btn" data-filter="snappshop">اسنپ‌شاپ</button>
-      <button class="filter-btn" data-filter="khanoumi">خانومی</button>
-      <button class="filter-btn" data-filter="technolife">تکنولایف</button>
+    <div class="filters-row">
+      <select id="sort-filter" class="pill-select">
+        <option value="cheap">ارزان ترین</option>
+        <option value="match">دقیق ترین</option>
+      </select>
+      <select id="condition-filter" class="pill-select">
+        <option value="all">وضعیت کالا</option>
+        <option value="new">فقط نو</option>
+        <option value="used">دست دوم</option>
+      </select>
     </div>
 
-    <!-- لیست نتایج -->
-    <div id="results-list" class="results-list"></div>
-
-
+    <div id="results-list"></div>
   </div>
 
-  <!-- خطا -->
+  <!-- Error -->
   <div id="error-state" class="state-container hidden">
-    <div class="empty-icon">⚠️</div>
-    <p class="state-text">خطا در جستجو</p>
-    <button id="retry-btn" class="retry-btn">تلاش مجدد</button>
+    <p style="font-size: 12px; color: var(--text-light);">خطا در جستجو</p>
   </div>
 
   <script src="sidebar.js"></script>
