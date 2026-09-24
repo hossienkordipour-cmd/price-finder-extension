@@ -14,7 +14,7 @@ const sortFilter = document.getElementById("sort-filter");
 const conditionFilter = document.getElementById("condition-filter");
 
 document.getElementById("popup-close-btn").addEventListener("click", () => {
-  window.parent.postMessage({ type: "CLOSE_SIDEBAR" }, "*");
+  window.parent.postMessage("CLOSE_PIQO_POPUP", "*");
 });
 
 document.getElementById("manual-search-form").addEventListener("submit", (e) => {
