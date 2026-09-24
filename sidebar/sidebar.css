@@ -159,7 +159,7 @@ body {
   gap: 8px;
   background: var(--card-bg);
   border-radius: 16px;
-  padding: 12px;
+  padding: 8px;
   margin-bottom: 12px;
   text-decoration: none;
   color: inherit;
@@ -235,10 +235,9 @@ body {
 .skeleton-card {
   display: flex;
   gap: 8px;
-  gap: 8px;
   background: var(--card-bg);
   border-radius: 16px;
-  padding: 12px;
+  padding: 8px;
   margin-bottom: 12px;
   align-items: center;
 }
