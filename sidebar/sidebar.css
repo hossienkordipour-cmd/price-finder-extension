@@ -167,10 +167,10 @@ body {
   font-weight: 700;
   color: var(--text-dark);
   margin-bottom: 4px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
   line-height: 1.5;
 }
 .card-store {

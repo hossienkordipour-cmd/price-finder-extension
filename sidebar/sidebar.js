@@ -125,6 +125,13 @@ function generateSkeletonHtml() {
 }
 
 function renderResults(results, isLoading = false) {
+  if (currentProduct) {
+    currentProductEl.innerHTML = generateCardHtml(currentProduct, true);
+    currentProductEl.classList.remove("hidden");
+  } else {
+    currentProductEl.classList.add("hidden");
+  }
+
   emptyState.classList.add("hidden");
   loadingState.classList.add("hidden");
   errorState.classList.add("hidden");
