@@ -156,7 +156,6 @@ function renderResults(results, isLoading = false) {
   }
 
   let html = filtered.map(r => generateCardHtml(r, false)).join("");
-  let html = filtered.map(r => generateCardHtml(r, false)).join("");
   
   if (isLoading) {
     html += generateSkeletonHtml() + generateSkeletonHtml();
