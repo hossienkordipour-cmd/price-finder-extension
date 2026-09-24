@@ -482,3 +482,7 @@ body {
   opacity: 0;
   transform: translateY(4px) scale(0.98);
 }
+
+.card-store:last-child {
+  margin-bottom: 0;
+}

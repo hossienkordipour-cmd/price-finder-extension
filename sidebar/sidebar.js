@@ -143,10 +143,12 @@ function generateCardHtml(item, isBase = false) {
       <div class="card-content">
         <h3 class="card-title">${item.name || currentProduct?.name || 'کالا'}</h3>
         <div class="card-store">${isBase ? item.store : storeText}</div>
+        ${item.price && item.price > 0 ? `
         <div class="card-bottom">
           <div class="card-price">${formatPrice(item.price)}<span>تومان</span></div>
           ${discountHtml}
         </div>
+        ` : ''}
       </div>
     </a>
   `;
