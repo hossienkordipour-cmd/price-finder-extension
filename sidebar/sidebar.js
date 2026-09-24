@@ -154,7 +154,24 @@ function renderResults(results, isLoading = false) {
 }
 
 chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
-  if (response && response.tabId) {
-    currentTabId = response.tabId;
+  if (chrome.runtime.lastError || !response) return;
+  if (response.tabId) currentTabId = response.tabId;
+  const state = response.state;
+  if (state && state.currentProduct) {
+    latestRequestId = state.requestId || 0;
+    currentProduct = state.currentProduct;
+    if (state.isLoading) {
+      showLoading();
+      if (state.searchResults && state.searchResults.length > 0) {
+        allResults = state.searchResults;
+        renderResults(allResults, true);
+      }
+    } else if (state.searchResults && state.searchResults.length > 0) {
+      allResults = state.searchResults;
+      renderResults(allResults, false);
+    } else {
+      showLoading();
+      chrome.runtime.sendMessage({ type: "START_SEARCH", tabId: currentTabId, product: currentProduct });
+    }
   }
 });
