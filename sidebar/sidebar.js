@@ -25,8 +25,37 @@ document.getElementById("manual-search-form").addEventListener("submit", (e) => 
   chrome.runtime.sendMessage({ type: "START_SEARCH", tabId: currentTabId, product: currentProduct });
 });
 
-[sortFilter, conditionFilter].forEach(el => {
-  el.addEventListener("change", () => renderResults(allResults, false));
+// Custom dropdown logic
+document.querySelectorAll('.custom-dropdown').forEach(dropdown => {
+  const header = dropdown.querySelector('.dropdown-header');
+  const list = dropdown.querySelector('.dropdown-list');
+  const items = dropdown.querySelectorAll('.dropdown-item');
+
+  header.addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.querySelectorAll('.dropdown-list').forEach(l => {
+      if (l !== list) l.classList.add('hidden');
+    });
+    list.classList.toggle('hidden');
+  });
+
+  items.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      dropdown.dataset.value = item.dataset.value;
+      header.innerHTML = item.innerHTML;
+      
+      items.forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      
+      list.classList.add('hidden');
+      renderResults(allResults, false);
+    });
+  });
+});
+
+document.addEventListener('click', () => {
+  document.querySelectorAll('.dropdown-list').forEach(l => l.classList.add('hidden'));
 });
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -138,11 +167,11 @@ function renderResults(results, isLoading = false) {
   resultsState.classList.remove("hidden");
 
   let filtered = [...results];
-  const cond = conditionFilter.value;
+  const cond = conditionFilter.dataset.value;
   if (cond === "new") filtered = filtered.filter(r => r.condition !== "used");
   if (cond === "used") filtered = filtered.filter(r => r.condition === "used");
 
-  const sort = sortFilter.value;
+  const sort = sortFilter.dataset.value;
   if (sort === "cheap") {
     filtered.sort((a, b) => a.price - b.price);
   } else if (sort === "match") {
