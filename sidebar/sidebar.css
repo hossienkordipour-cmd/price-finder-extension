@@ -177,7 +177,7 @@ body {
   padding-top: 4px;
 }
 .card-title {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-dark);
   margin-bottom: 4px;
@@ -188,7 +188,7 @@ body {
   line-height: 1.5;
 }
 .card-store {
-  font-size: 10px;
+  font-size: 11px;
   color: #777777;
   margin-bottom: 12px;
 }
