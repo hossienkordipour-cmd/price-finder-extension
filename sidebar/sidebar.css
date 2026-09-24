@@ -283,6 +283,7 @@ body {
 
 .results-list.grid-view .result-card {
   flex-direction: column;
+  border-radius: 16px;
   padding: 4px; /* Tighter padding for grid */
   gap: 8px;     /* Distance from image to text */
   align-items: stretch;
@@ -291,12 +292,14 @@ body {
 .results-list.grid-view .card-image-wrapper {
   width: 100%;
   height: 140px; 
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .results-list.grid-view .card-content {
   padding-top: 0;
   justify-content: flex-start;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 /* Store name moves above title */
@@ -351,6 +354,7 @@ body {
 .results-list.grid-view .skeleton-img {
   width: 100%;
   height: 140px;
+  border-radius: 12px;
 }
 .results-list.grid-view .skeleton-content {
   margin-left: 0;
