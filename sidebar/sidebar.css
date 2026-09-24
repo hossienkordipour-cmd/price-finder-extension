@@ -165,7 +165,7 @@ body {
   justify-content: center;
 }
 .card-title {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-dark);
   margin-bottom: 4px;
