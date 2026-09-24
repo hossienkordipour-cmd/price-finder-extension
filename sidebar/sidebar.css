@@ -278,10 +278,11 @@ body {
 .results-list.grid-view {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 8px;
 }
 
 .results-list.grid-view .result-card {
+  margin-bottom: 0;
   flex-direction: column;
   border-radius: 16px;
   padding: 4px; /* Tighter padding for grid */
@@ -346,6 +347,7 @@ body {
 
 /* Skeleton adjustments for grid view */
 .results-list.grid-view .skeleton-card {
+  margin-bottom: 0;
   flex-direction: column;
   padding: 4px;
   gap: 8px;
