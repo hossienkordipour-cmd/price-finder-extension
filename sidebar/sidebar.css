@@ -174,7 +174,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding-top: 2px;
+  padding-top: 4px;
 }
 .card-title {
   font-size: 12px;
