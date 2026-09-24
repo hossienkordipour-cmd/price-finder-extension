@@ -149,6 +149,13 @@ function renderResults(results, isLoading = false) {
     filtered.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
   }
 
+  // Update results count
+  const countEl = document.getElementById("results-count");
+  if (countEl) {
+    countEl.innerText = (isLoading && filtered.length === 0) ? "..." : filtered.length.toLocaleString("fa-IR") + " محصول";
+  }
+
+  let html = filtered.map(r => generateCardHtml(r, false)).join("");
   let html = filtered.map(r => generateCardHtml(r, false)).join("");
   
   if (isLoading) {

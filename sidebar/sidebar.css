@@ -134,9 +134,18 @@ body {
 /* Filters Row */
 .filters-row {
   display: flex;
-  justify-content: flex-start;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 16px;
+}
+.filters-group {
+  display: flex;
+  gap: 8px;
+}
+.results-count {
+  font-size: 13px;
+  color: #6B6B6B;
+  font-weight: 500;
 }
 .pill-select {
   appearance: none;
