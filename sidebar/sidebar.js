@@ -182,3 +182,8 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
     }
   }
 });
+
+
+document.querySelector(".grid-icon-btn").addEventListener("click", () => {
+  resultsListEl.classList.toggle("grid-view");
+});
