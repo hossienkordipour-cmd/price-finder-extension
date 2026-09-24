@@ -196,6 +196,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  margin-top: auto;
 }
 .card-discount {
   font-size: 10px;
