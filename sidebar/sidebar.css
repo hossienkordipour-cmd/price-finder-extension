@@ -154,9 +154,15 @@ body {
 }
 
 /* Cards */
+
+.result-card:hover {
+  transform: scale(1.02);
+}
+
 .result-card {
   display: flex;
   gap: 8px;
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   background: var(--card-bg);
   border-radius: 16px;
   padding: 8px;
