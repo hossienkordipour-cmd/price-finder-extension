@@ -145,6 +145,7 @@ body {
 /* Cards */
 .result-card {
   display: flex;
+  gap: 8px;
   background: var(--card-bg);
   border-radius: 16px;
   padding: 12px;
@@ -162,7 +163,6 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  margin-left: 12px;
 }
 .card-title {
   font-size: 12px;
@@ -190,7 +190,7 @@ body {
   color: var(--text-light);
 }
 .card-price {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   color: var(--text-dark);
 }
@@ -222,6 +222,8 @@ body {
 }
 .skeleton-card {
   display: flex;
+  gap: 8px;
+  gap: 8px;
   background: var(--card-bg);
   border-radius: 16px;
   padding: 12px;
@@ -230,7 +232,6 @@ body {
 }
 .skeleton-content {
   flex: 1;
-  margin-left: 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
