@@ -223,7 +223,14 @@ function renderResults(results, isLoading = false) {
   
   if (isLoading) {
     html += generateSkeletonHtml() + generateSkeletonHtml();
-  } else if (filtered.length === 0) {
+  } else if (allResults.length === 0 && !isLoading) {
+    html = `
+      <div class="empty-view">
+        <img src="assets/empty-box.png" alt="No Results" class="empty-illustration">
+        <div class="empty-title">محصولی پیدا نکردیم</div>
+        <div class="empty-subtitle">متأسفانه نتونستیم این کالا رو تو فروشگاه‌های دیگه پیدا کنیم.</div>
+      </div>`;
+  } else if (filtered.length === 0 && !isLoading) {
     html = `
       <div class="empty-view">
         <img src="assets/empty-filter.png" alt="No Filter Results" class="empty-illustration">
