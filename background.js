@@ -626,7 +626,7 @@ async function searchBasalam(productName) {
           store: "باسلام", storeColor: "#8B5CF6",
           name: item.name || item.title || productName,
           price, originalPrice: price, discount: 0,
-          url: item.absolute_url ? `https://basalam.com${item.absolute_url}` : `https://basalam.com/s?q=${query}`,
+          url: (item.vendor && item.vendor.identifier && item.id) ? `https://basalam.com/${item.vendor.identifier}/product/${item.id}` : `https://basalam.com/s?q=${query}`,
           image: item.thumbnail || item.image || item.photo?.MEDIUM || item.photo?.SMALL || item.cover || "",
           rating: item.rate || item.rating?.score || 0, reviewCount: item.rate_count || item.rating?.count || 0, availability: true,
         };
