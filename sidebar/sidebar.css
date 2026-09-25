@@ -604,5 +604,4 @@ body {
   height: 32px;
   width: auto;
   object-fit: contain;
-  margin-top: -6px; /* Adjust slightly up or down if needed based on the image crop */
 }
