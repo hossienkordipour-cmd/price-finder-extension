@@ -17,7 +17,7 @@ document.getElementById("popup-close-btn").addEventListener("click", () => {
   window.parent.postMessage("CLOSE_PIQO_POPUP", "*");
 });
 
-document.getElementById("manual-search-form").addEventListener("submit", (e) => {
+document.getElementById("manual-search-form")?.addEventListener("submit", (e) => {
   e.preventDefault();
   const query = document.getElementById("manual-search-input").value.trim();
   if (!query) return;
@@ -224,10 +224,40 @@ function renderResults(results, isLoading = false) {
   if (isLoading) {
     html += generateSkeletonHtml() + generateSkeletonHtml();
   } else if (filtered.length === 0) {
-    html = `<div style="text-align: center; color: var(--text-light); padding: 32px 0; font-size: 13px;">نتیجه‌ای یافت نشد</div>`;
+    html = `
+      <div class="empty-view">
+        <img src="assets/empty-filter.png" alt="No Filter Results" class="empty-illustration">
+        <div class="empty-title">نتیجه‌ای با این فیلترها نیست</div>
+        <div class="empty-subtitle">فیلترها رو تغییر بده تا گزینه‌های بیشتری ببینی.</div>
+        <button class="clear-filters-btn" id="btn-clear-filters">پاک کردن فیلترها</button>
+      </div>`;
   }
   
   resultsListEl.innerHTML = html;
+  
+  const clearBtn = document.getElementById('btn-clear-filters');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      // Reset Sort
+      const sortDropdown = document.getElementById('sort-filter');
+      sortDropdown.dataset.value = 'cheap';
+      sortDropdown.querySelector('.header-text') ? sortDropdown.querySelector('.header-text').innerText = 'ارزان ترین' : sortDropdown.querySelector('.dropdown-header').innerText = 'ارزان ترین';
+      sortDropdown.querySelectorAll('.dropdown-item').forEach(i => {
+        i.classList.remove('selected');
+        if (i.dataset.value === 'cheap') i.classList.add('selected');
+      });
+
+      // Reset Condition
+      const condDropdown = document.getElementById('condition-filter');
+      condDropdown.querySelectorAll('.dropdown-item').forEach(i => i.classList.add('selected'));
+      const condClearBtn = condDropdown.querySelector('.clear-filter');
+      if (condClearBtn) condClearBtn.classList.add('hidden');
+      const condHeaderText = condDropdown.querySelector('.header-text');
+      if (condHeaderText) condHeaderText.innerText = 'وضعیت کالا';
+      
+      renderResults(allResults, false);
+    });
+  }
 }
 
 chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
