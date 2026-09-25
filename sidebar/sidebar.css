@@ -499,27 +499,27 @@ body {
 .empty-illustration {
   width: 160px;
   height: auto;
-  margin-bottom: 24px;
+  margin-bottom: 8px;
 }
 .empty-title {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-dark);
   margin-bottom: 8px;
 }
 .empty-subtitle {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-gray);
   line-height: 1.6;
 }
 .clear-filters-btn {
-  margin-top: 24px;
+  margin-top: 20px;
   background-color: #171717;
   color: #FFFFFF;
   border: none;
   border-radius: 100px;
   padding: 10px 24px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.2s;
