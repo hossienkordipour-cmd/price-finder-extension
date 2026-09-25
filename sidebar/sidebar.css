@@ -557,3 +557,77 @@ body {
 .clear-filters-btn:hover {
   opacity: 0.85;
 }
+
+/* ===================== */
+/* Base Product Card      */
+/* ===================== */
+.base-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  padding: 16px;
+  margin: 0 0 4px 0;
+  cursor: default;
+  pointer-events: none;
+  user-select: none;
+}
+.base-card-top {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.base-card-content {
+  flex: 1;
+  min-width: 0;
+}
+.base-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-dark);
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+.base-card-img-wrapper {
+  width: 96px;
+  height: 96px;
+  border-radius: 12px;
+  background: #F3F4F6;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.base-card-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.base-card-bottom {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.base-card-store {
+  display: inline-block;
+  background: #EFEFEF;
+  color: #555;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 100px;
+}
+.base-card-price {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-dark);
+}
+.base-card-price span {
+  font-size: 11px;
+  font-weight: 400;
+  color: #909090;
+  margin-right: 4px;
+}
