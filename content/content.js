@@ -356,7 +356,23 @@ if (product && product.name) {
 
     let name = document.querySelector("h1")?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
-    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+    
+    let image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+    
+    if (!image) {
+      if (name) {
+        const imgByAlt = document.querySelector(`img[alt="${name}"]`);
+        if (imgByAlt) image = getAbsoluteUrl(imgByAlt.src || imgByAlt.getAttribute("data-src"));
+      }
+      if (!image) {
+        const allImgs = Array.from(document.querySelectorAll("img"));
+        const productImg = allImgs.find(img => {
+          const src = img.src || img.getAttribute("data-src") || "";
+          return src.includes('800X800') || src.includes('512X512') || (src.includes('.jpg') && !src.includes('avatar'));
+        });
+        if (productImg) image = getAbsoluteUrl(productImg.src || productImg.getAttribute("data-src"));
+      }
+    }
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
