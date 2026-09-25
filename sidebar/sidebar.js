@@ -227,15 +227,15 @@ function renderResults(results, isLoading = false) {
     html = `
       <div class="empty-view">
         <img src="assets/empty-box.png" alt="No Results" class="empty-illustration">
-        <div class="empty-title">همه‌جا رو گشتیم، نبود! 📦</div>
-        <div class="empty-subtitle">متأسفانه این کالا تو هیچ‌کدوم از فروشگاه‌ها پیدا نشد. یه محصول دیگه رو امتحان کن تا دوباره برات بگردم!</div>
+        <div class="empty-title">همه‌جا رو گشتیم، نبود!</div>
+        <div class="empty-subtitle">این محصول فعلاً تو فروشگاه‌ها پیدا نشد. یه محصول دیگه رو امتحان کن.</div>
       </div>`;
   } else if (filtered.length === 0 && !isLoading) {
     html = `
       <div class="empty-view">
         <img src="assets/empty-filter.png" alt="No Filter Results" class="empty-illustration">
-        <div class="empty-title">نتیجه‌ای با این فیلترها نیست</div>
-        <div class="empty-subtitle">فیلترها رو تغییر بده تا گزینه‌های بیشتری ببینی.</div>
+        <div class="empty-title">با این فیلترها چیزی پیدا نکردیم!</div>
+        <div class="empty-subtitle">فیلترها رو تغییر بده یا بعضی‌هاشون رو بردار تا گزینه‌های بیشتری ببینی.</div>
         <button class="clear-filters-btn" id="btn-clear-filters">پاک کردن فیلترها</button>
       </div>`;
   }
