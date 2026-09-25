@@ -58,7 +58,16 @@ async function fetchWithTimeout(resource, options = {}) {
 // ==============================
 
 chrome.action.onClicked.addListener((tab) => {
-  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_POPUP" }).catch(() => {});
+  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_POPUP" }).catch(() => {
+    // Fallback for chrome:// or webstore pages where content script can't run
+    chrome.windows.create({
+      url: chrome.runtime.getURL("sidebar/sidebar.html"),
+      type: "popup",
+      width: 400,
+      height: 650,
+      focused: true
+    });
+  });
 });
 
 const tabSearches = new TabSearchRegistry();
