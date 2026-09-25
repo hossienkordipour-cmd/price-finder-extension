@@ -289,6 +289,9 @@ body {
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
 }
 .card-price {
   font-size: 16px;
@@ -302,6 +305,7 @@ body {
   margin-right: 4px;
 }
 .card-image-wrapper {
+  position: relative;
   width: 72px;
   height: 72px;
   border-radius: 12px;
@@ -429,9 +433,6 @@ body {
   font-size: 10px;
 }
 
-.results-list.grid-view .card-discount {
-  display: none; /* Hide in grid view to keep it clean */
-}
 
 /* Skeleton adjustments for grid view */
 .results-list.grid-view .skeleton-card {
