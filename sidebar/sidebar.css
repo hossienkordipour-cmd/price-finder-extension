@@ -289,9 +289,26 @@ body {
   font-size: 10px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.bottom-discount {
+  display: inline-flex;
+}
+
+.overlay-discount {
+  display: none;
   position: absolute;
   right: 4px;
   bottom: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* slight shadow for visibility over images */
+}
+
+/* In grid view, swap them! */
+.results-list.grid-view .bottom-discount {
+  display: none;
+}
+.results-list.grid-view .overlay-discount {
+  display: inline-flex;
 }
 .card-price {
   font-size: 16px;
