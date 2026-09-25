@@ -99,7 +99,7 @@ body {
   40% { transform: scale(1.2); opacity: 1; }
 }
 .loading-title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-dark);
   margin-bottom: 6px;
