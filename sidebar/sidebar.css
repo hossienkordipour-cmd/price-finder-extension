@@ -565,3 +565,12 @@ body {
 .clear-filters-btn:hover {
   opacity: 0.85;
 }
+
+/* Base card specific overrides */
+.base-product-card {
+  cursor: default !important;
+  pointer-events: none !important;
+}
+.base-product-card:hover {
+  transform: none !important;
+}
