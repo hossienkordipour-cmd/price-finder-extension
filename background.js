@@ -58,16 +58,7 @@ async function fetchWithTimeout(resource, options = {}) {
 // ==============================
 
 chrome.action.onClicked.addListener((tab) => {
-  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_POPUP" }).catch(() => {
-    // Fallback for chrome:// or webstore pages where content script can't run
-    chrome.windows.create({
-      url: chrome.runtime.getURL("sidebar/sidebar.html"),
-      type: "popup",
-      width: 400,
-      height: 650,
-      focused: true
-    });
-  });
+  chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_POPUP" }).catch(() => {});
 });
 
 const tabSearches = new TabSearchRegistry();
@@ -899,3 +890,38 @@ function parseSnappShopItems(items, productName) {
     };
   }).filter(p => p !== null).slice(0, 5);
 }
+
+
+// Dynamically set popup for restricted pages where content scripts can't run
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (tab.url) {
+    const isRestricted = tab.url.startsWith('chrome://') || 
+                         tab.url.startsWith('edge://') || 
+                         tab.url.startsWith('about:') || 
+                         tab.url.startsWith('https://chrome.google.com/webstore') ||
+                         tab.url.startsWith('https://chromewebstore.google.com');
+                         
+    if (isRestricted) {
+      chrome.action.setPopup({ tabId: tabId, popup: "sidebar/sidebar.html" });
+    } else {
+      chrome.action.setPopup({ tabId: tabId, popup: "" });
+    }
+  }
+});
+
+chrome.tabs.onActivated.addListener(activeInfo => {
+  chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (tab && tab.url) {
+      const isRestricted = tab.url.startsWith('chrome://') || 
+                           tab.url.startsWith('edge://') || 
+                           tab.url.startsWith('about:') || 
+                           tab.url.startsWith('https://chrome.google.com/webstore') ||
+                           tab.url.startsWith('https://chromewebstore.google.com');
+      if (isRestricted) {
+        chrome.action.setPopup({ tabId: tab.id, popup: "sidebar/sidebar.html" });
+      } else {
+        chrome.action.setPopup({ tabId: tab.id, popup: "" });
+      }
+    }
+  });
+});

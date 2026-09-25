@@ -24,6 +24,8 @@ body {
   color: var(--text-dark);
   padding: 16px;
   direction: rtl;
+  min-width: 380px;
+  min-height: 500px;
 }
 
 .hidden {
