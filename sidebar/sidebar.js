@@ -296,6 +296,13 @@ const gridSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" str
 const listSvg = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>`;
 
 gridIconBtn.addEventListener("click", () => {
+  // Disable animation if empty state is showing
+  if (resultsListEl.querySelector('.empty-view')) {
+    const isGrid = resultsListEl.classList.toggle("grid-view");
+    gridIconBtn.innerHTML = isGrid ? listSvg : gridSvg;
+    return;
+  }
+
   resultsListEl.classList.add("switching-layout");
   setTimeout(() => {
     const isGrid = resultsListEl.classList.toggle("grid-view");
