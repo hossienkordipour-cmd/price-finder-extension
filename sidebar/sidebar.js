@@ -227,8 +227,8 @@ function renderResults(results, isLoading = false) {
     html = `
       <div class="empty-view">
         <img src="assets/empty-box.png" alt="No Results" class="empty-illustration">
-        <div class="empty-title">محصولی پیدا نکردیم</div>
-        <div class="empty-subtitle">متأسفانه نتونستیم این کالا رو تو فروشگاه‌های دیگه پیدا کنیم.</div>
+        <div class="empty-title">همه‌جا رو گشتیم، نبود! 📦</div>
+        <div class="empty-subtitle">متأسفانه این کالا تو هیچ‌کدوم از فروشگاه‌ها پیدا نشد. یه محصول دیگه رو امتحان کن تا دوباره برات بگردم!</div>
       </div>`;
   } else if (filtered.length === 0 && !isLoading) {
     html = `
