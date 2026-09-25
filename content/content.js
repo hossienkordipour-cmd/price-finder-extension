@@ -91,7 +91,9 @@
     if (location.href !== lastUrl) {
       lastUrl = location.href;
       lastDetectedKey = null; // Force reset on navigation
-      removePiqoUI(); // Clear UI for the new page
+      if (document.getElementById('piqo-widget-container')) {
+        removePiqoUI(); // Only clear if widget was present
+      }
       scheduleDetection();
     }
   });
@@ -164,7 +166,10 @@ if (product && product.name) {
       }
     } else {
       // Not a product page anymore (SPA navigation to home page, etc.)
-      removePiqoUI();
+      // Only remove if the floating widget is present (which means a product was previously detected).
+      if (document.getElementById('piqo-widget-container')) {
+        removePiqoUI();
+      }
     }
   }
 
