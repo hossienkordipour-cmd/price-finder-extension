@@ -162,7 +162,7 @@ function generateCardHtml(item, isBase = false) {
     : '';
 
   const tag = isBase ? 'div' : 'a';
-  const finalUrl = getAffiliateUrl(item.source, item.url);
+  const finalUrl = getAffiliateUrl(item.store || item.source, item.url);
   const tagAttrs = isBase ? '' : `href="${finalUrl}" target="_blank"`;
   return `
     <${tag} ${tagAttrs} class="result-card${isBase ? ' base-product-card' : ''}">
