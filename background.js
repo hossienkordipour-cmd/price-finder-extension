@@ -16,6 +16,7 @@ import {
   readApiLogs,
 } from './api-logger.js';
 import { SearchResultCache } from './search-cache.js';
+import { PIQO_API_BASE_URL, parsePiqoApiResponse } from './piqo-api-client.js';
 
 // ==============================
 // Utility: Fetch with Timeout
@@ -352,6 +353,7 @@ async function searchPricesFromStores(product, onProgress) {
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
 
   const promises = [
+    { name: "افیلیو", p: searchPiqoApi(searchName) },
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
@@ -377,7 +379,15 @@ async function searchPricesFromStores(product, onProgress) {
   };
 
   const sortAndDedupe = (results) => {
-    const unique = [...new Map(results.map(item => [item.store + "|" + normalizeProductText(item.name) + "|" + item.price, item])).values()];
+    const uniqueByKey = new Map();
+    results.forEach(item => {
+      const key = item.store + "|" + normalizeProductText(item.name) + "|" + item.price;
+      const existing = uniqueByKey.get(key);
+      if (!existing || (item.isAffiliate && !existing.isAffiliate)) {
+        uniqueByKey.set(key, item);
+      }
+    });
+    const unique = [...uniqueByKey.values()];
     unique.sort((a, b) => Number(b.availability) - Number(a.availability) || Number(a.condition === "used") - Number(b.condition === "used") || a.price - b.price || b.matchScore - a.matchScore);
     return unique;
   };
@@ -397,6 +407,18 @@ async function searchPricesFromStores(product, onProgress) {
 
   await Promise.allSettled(wrappedPromises);
   return sortAndDedupe(allValidResults);
+}
+
+async function searchPiqoApi(productName) {
+  const url = `${PIQO_API_BASE_URL}/v1/search?q=${encodeURIComponent(productName)}`;
+  const response = await fetchWithTimeout(url, {
+    timeout: 12000,
+    logStore: "افیلیو",
+    logOperation: "server-search",
+    headers: { "Accept": "application/json" },
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  return parsePiqoApiResponse(await response.json());
 }
 
 // ==============================
