@@ -13,6 +13,29 @@ const resultsListEl = document.getElementById("results-list");
 const sortFilter = document.getElementById("sort-filter");
 const conditionFilter = document.getElementById("condition-filter");
 
+// ==========================================
+// سیستم افیلیت مارکتینگ (همکاری در فروش)
+// ==========================================
+function getAffiliateUrl(store, originalUrl) {
+  if (!originalUrl) return "#";
+  
+  if (store === "باسلام" || store === "basalam") {
+    // کد افیلیت باسلام
+    try {
+      // استفاده از btoa برای انکد کردن آدرس مقصد به Base64
+      const b64 = btoa(unescape(encodeURIComponent(originalUrl)));
+      return `https://a.bslm.ir/api/v1/tracking/click/g/466ef6e231e4f71cf496b350123065d3?b64=${b64}`;
+    } catch (e) {
+      console.error("Base64 encoding failed for URL:", originalUrl);
+      return originalUrl;
+    }
+  }
+  
+  // دیجی‌کالا و سایر پلتفرم‌ها رو هم میشه اینجا اضافه کرد
+  
+  return originalUrl;
+}
+
 document.getElementById("popup-close-btn").addEventListener("click", () => {
   window.parent.postMessage("CLOSE_PIQO_POPUP", "*");
 });
@@ -139,7 +162,8 @@ function generateCardHtml(item, isBase = false) {
     : '';
 
   const tag = isBase ? 'div' : 'a';
-  const tagAttrs = isBase ? '' : `href="${item.url}" target="_blank"`;
+  const finalUrl = getAffiliateUrl(item.source, item.url);
+  const tagAttrs = isBase ? '' : `href="${finalUrl}" target="_blank"`;
   return `
     <${tag} ${tagAttrs} class="result-card${isBase ? ' base-product-card' : ''}">
       <div class="card-image-wrapper">
