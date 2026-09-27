@@ -362,9 +362,6 @@ async function searchPricesFromStores(product, onProgress) {
     { name: "شیپور", p: searchSheypoor(searchName) },
     { name: "مسترکالا", p: searchMasterKala(searchName) },
     { name: "دیجی‌پی", p: searchDigipay(searchName) },
-    { name: "اسنپ‌شاپ", p: searchSnappShop(searchName) },
-    { name: "خانومی", p: searchKhanoumi(searchName) },
-    { name: "تکنولایف", p: searchTechnolife(searchName) },
   ];
 
   const allValidResults = [];

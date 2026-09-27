@@ -51,16 +51,6 @@
         "content/content.js"
       ],
       "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://*.snappshop.ir/*",
-        "https://snappshop.ir/*"
-      ],
-      "js": [
-        "content/snappshop_bridge.js"
-      ],
-      "run_at": "document_idle"
     }
   ],
   "action": {
