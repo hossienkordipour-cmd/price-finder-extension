@@ -134,6 +134,9 @@ function generateCardHtml(item, isBase = false) {
   }
 
   const storeText = item.condition === "used" ? `${item.store} - کارکرده` : item.store;
+  const affiliateBadge = !isBase && item.source === "affilio"
+    ? '<span class="affiliate-badge" aria-label="نتیجه افیلیت از افیلیو">افیلیو</span>'
+    : '';
 
   const tag = isBase ? 'div' : 'a';
   const tagAttrs = isBase ? '' : `href="${item.url}" target="_blank"`;
@@ -145,7 +148,10 @@ function generateCardHtml(item, isBase = false) {
       </div>
       <div class="card-content">
         <h3 class="card-title">${item.name || currentProduct?.name || 'کالا'}</h3>
-        <div class="card-store">${isBase ? item.store : storeText}</div>
+        <div class="card-store-row">
+          <div class="card-store">${isBase ? item.store : storeText}</div>
+          ${affiliateBadge}
+        </div>
         ${item.price && item.price > 0 ? `
         <div class="card-bottom">
           <div class="card-price">${formatPrice(item.price)}<span>تومان</span></div>
