@@ -10,7 +10,7 @@
     "tabs"
   ],
   "host_permissions": [
-    "http://91.247.171.166/*",
+    "https://api.piqoo.ir/*",
     "https://*.digikala.com/*",
     "https://api.digikala.com/*",
     "https://dkstatics-public.digikala.com/*",
