@@ -1,4 +1,4 @@
-export const PIQO_API_BASE_URL = "http://91.247.171.166";
+export const PIQO_API_BASE_URL = "https://api.piqoo.ir";
 
 export function parsePiqoApiResponse(payload) {
   if (!payload || !Array.isArray(payload.results)) return [];

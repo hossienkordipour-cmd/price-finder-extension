@@ -41,6 +41,7 @@ flowchart LR
 - آخرین commit بررسی‌شده هنگام تهیه این سند: `17e6613 feat: scaffold PIQO affiliate API`
 - مسیر نسخه محلی در زمان توسعه: `C:\Users\User\Documents\Codex\piqo-api`
 - مسیر پروژه روی سرور: `/home/piqo/piqo-api`
+- endpoint عمومی production: `https://api.piqoo.ir`
 
 ### افزونه
 
@@ -281,6 +282,7 @@ IP خروجی ثابت VPS باید در پنل Affilio مجاز/whitelist شد�
 - فایل Nginx در `/etc/nginx/sites-available/piqo-api` ساخته و symlink آن در `sites-enabled` فعال شده است.
 - کانفیگ پیش‌فرض Nginx غیرفعال شده است.
 - `nginx -t` و reload موفق بوده‌اند.
+- گواهی Let's Encrypt برای `api.piqoo.ir` فعال است و درخواست‌های HTTP به HTTPS redirect می‌شوند.
 
 ### وضعیت Docker Compose
 
@@ -450,7 +452,7 @@ npm test
 آدرس فعلی در کد افزونه:
 
 ```js
-export const PIQO_API_BASE_URL = "http://91.247.171.166";
+export const PIQO_API_BASE_URL = "https://api.piqoo.ir";
 ```
 
 رفتار ادغام:
@@ -480,9 +482,8 @@ export const PIQO_API_BASE_URL = "http://91.247.171.166";
 
 این موارد برای production واقعی ضروری یا مهم‌اند:
 
-1. **دامنه و HTTPS:** سرویس فعلاً روی HTTP و IP مستقیم است. باید دامنه متصل و گواهی TLS نصب شود؛ سپس آدرس افزونه به `https://...` تغییر کند.
-2. **محدود کردن CORS:** مقدار `CORS_ORIGINS=*` موقت است. پس از مشخص‌شدن origin نهایی افزونه/وب باید محدود شود.
-3. **سخت‌سازی SSH:** ورود با کلید SSH تنظیم شود؛ سپس ورود root و password authentication در صورت امکان غیرفعال شود. قبل از این تغییر حتماً یک نشست SSH دوم برای تست باز بماند تا دسترسی قطع نشود.
+1. **محدود کردن CORS:** مقدار `CORS_ORIGINS=*` موقت است. پس از مشخص‌شدن origin نهایی افزونه/وب باید محدود شود.
+2. **سخت‌سازی SSH:** ورود با کلید SSH تنظیم شود؛ سپس ورود root و password authentication در صورت امکان غیرفعال شود. قبل از این تغییر حتماً یک نشست SSH دوم برای تست باز بماند تا دسترسی قطع نشود.
 4. **چرخش رمزها:** تصویر حاوی IP و اطلاعات پنل قبلاً به اشتباه در گروه عمومی فرستاده شده بود. رمزهای root و `piqo` در همان فرایند تغییر کردند، ولی رمز پنل سرویس‌دهنده و هر رمز دیگری که احتمال نمایش داشته باید دوباره بررسی/تعویض شود.
 5. **بررسی لاگ ورود:** ورودهای ناشناس با `last`, `journalctl` و لاگ SSH بررسی شوند.
 6. **Fail2ban یا محدودسازی SSH:** برای کاهش brute force تنظیم شود.
@@ -510,9 +511,6 @@ export const PIQO_API_BASE_URL = "http://91.247.171.166";
 
 ### اولویت خیلی بالا
 
-- اتصال دامنه به VPS
-- راه‌اندازی HTTPS و redirect از HTTP به HTTPS
-- تغییر `PIQO_API_BASE_URL` افزونه به URL امن
 - محدودکردن CORS
 - بررسی و سخت‌سازی SSH و رمزهای افشاشده احتمالی
 - push کردن commitهای محلی افزونه در صورت تأیید نهایی
@@ -543,7 +541,8 @@ export const PIQO_API_BASE_URL = "http://91.247.171.166";
 - [ ] `/health` از localhost و اینترنت تست شده است.
 - [ ] یک جست‌وجوی واقعی Affilio انجام و `meta.cache` بررسی شده است.
 - [ ] وضعیت Docker، Redis، Nginx و UFW بررسی شده است.
-- [ ] دامنه/HTTPS و CORS تعیین تکلیف شده‌اند.
+- [x] دامنه `api.piqoo.ir` و HTTPS فعال‌اند.
+- [ ] CORS تعیین تکلیف شده است.
 - [ ] commitهای محلی افزونه push یا مستند شده‌اند.
 - [ ] کانفیگ واقعی Nginx و محل secretها تحویل شده است.
 
@@ -564,4 +563,4 @@ export const PIQO_API_BASE_URL = "http://91.247.171.166";
 
 ### جمع‌بندی وضعیت تحویل
 
-MVP بک‌اند عملیاتی است: Affilio پاسخ واقعی می‌دهد، Redis کار می‌کند، Nginx و Docker فعال‌اند و افزونه می‌تواند نتایج را دریافت و با بج Affilio نمایش دهد. مهم‌ترین بدهی فعلی production، استفاده از HTTP/IP مستقیم، CORS باز، نبود مانیتورینگ و استقرار دستی است.
+MVP بک‌اند عملیاتی است: Affilio پاسخ واقعی می‌دهد، Redis کار می‌کند، Nginx و Docker فعال‌اند، endpoint امن `https://api.piqoo.ir` در دسترس است و افزونه می‌تواند نتایج را دریافت و با بج Affilio نمایش دهد. مهم‌ترین بدهی‌های فعلی production، CORS باز، نبود مانیتورینگ و استقرار دستی هستند.
