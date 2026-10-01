@@ -362,6 +362,8 @@ async function searchPricesFromStores(product, onProgress) {
     { name: "شیپور", p: searchSheypoor(searchName) },
     { name: "مسترکالا", p: searchMasterKala(searchName) },
     { name: "دیجی‌پی", p: searchDigipay(searchName) },
+    { name: "کالائوما", p: searchKalaoma(searchName) },
+    { name: "روژا", p: searchRojashop(searchName) },
   ];
 
   const allValidResults = [];
@@ -910,6 +912,93 @@ function parseSnappShopItems(items, productName) {
   }).filter(p => p !== null).slice(0, 5);
 }
 
+
+
+// ==============================
+// کالائوما (Kalaoma)
+// ==============================
+async function searchKalaoma(productName) {
+  try {
+    const query = encodeURIComponent(productName);
+    const url = `https://kalaoma.com/wp-json/wc/store/products?search=${query}`;
+    const response = await fetchWithTimeout(url, {
+      logStore: "کالائوما",
+      headers: { "Accept": "application/json" }
+    });
+    if (!response.ok) return [];
+    const items = await response.json();
+    if (!Array.isArray(items)) return [];
+    
+    return items.map(item => {
+      const priceStr = item.prices?.price || item.prices?.regular_price || "0";
+      let price = parsePrice(priceStr, "TOMAN"); // Kalaoma usually returns minor units or exact string. Since it's IRT, parsePrice handles it.
+      if (price === 0) return null;
+      
+      const imgUrl = item.images && item.images.length > 0 ? item.images[0].src : "";
+      
+      return {
+        store: "کالائوما", storeColor: "#FBEE01",
+        name: item.name,
+        price, originalPrice: price, discount: 0,
+        url: item.permalink || `https://kalaoma.com/?s=${query}&post_type=product`,
+        image: imgUrl,
+        rating: 0, reviewCount: 0, availability: item.is_in_stock
+      };
+    }).filter(p => p !== null).slice(0, 5);
+  } catch (e) {
+    console.warn("[کالائوما] خطا:", e.message);
+    return [];
+  }
+}
+
+// ==============================
+// روژا شاپ (Rojashop)
+// ==============================
+async function searchRojashop(productName) {
+  try {
+    const query = encodeURIComponent(productName);
+    const url = `https://rojashop.com/search?q=${query}`;
+    const response = await fetchWithTimeout(url, {
+      logStore: "روژا",
+      headers: { 
+        "Accept": "application/json",
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    });
+    if (!response.ok) return [];
+    const resData = await response.json();
+    let items = [];
+    if (resData?.data?.products?.data) {
+       items = resData.data.products.data;
+    } else if (Array.isArray(resData?.data?.products)) {
+       items = resData.data.products;
+    } else if (Array.isArray(resData?.products)) {
+       items = resData.products;
+    }
+    
+    return items.map(item => {
+      const priceVal = item.price || item.discounted_price || item.final_price || 0;
+      let price = parsePrice(priceVal, "TOMAN");
+      // Sometime Rojashop returns price as "12,000 تومان". parsePrice handles non-digits.
+      if (price === 0) return null;
+      
+      const imgUrl = item.image || item.thumbnail || "";
+      const url = item.slug ? `https://rojashop.com/product/${item.slug}` : (item.url || `https://rojashop.com/search?q=${query}`);
+      
+      return {
+        store: "روژا", storeColor: "#FF0000",
+        name: item.title || item.name || productName,
+        price, originalPrice: price, discount: 0,
+        url,
+        image: imgUrl,
+        rating: 0, reviewCount: 0, availability: item.in_stock !== false && item.stock !== 0
+      };
+    }).filter(p => p !== null).slice(0, 5);
+  } catch (e) {
+    console.warn("[روژا] خطا:", e.message);
+    return [];
+  }
+}
 
 // Dynamically set popup for restricted pages where content scripts can't run
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
