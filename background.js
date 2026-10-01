@@ -967,6 +967,37 @@ async function searchRojashop(productName) {
     });
     if (!response.ok) return [];
     const resData = await response.json();
+    let html = resData?.data?.products || "";
+    if (typeof html !== 'string') return [];
+    
+    const items = [];
+    // Simple regex to extract product tiles from HTML
+    const productRegex = /<div class="product-item[^>]*>.*?<a href="([^"]+)".*?<img[^>]*src="([^"]+)".*?<h3[^>]*>(.*?)<\/h3>.*?<span class="price">([^<]+)<\/span>/gs;
+    
+    let match;
+    while ((match = productRegex.exec(html)) !== null && items.length < 5) {
+       const [ , pUrl, pImg, pName, pPriceStr ] = match;
+       let price = parsePrice(pPriceStr.replace(/,/g, ''), "TOMAN");
+       if (price > 0) {
+           items.push({
+             store: "روژا", storeColor: "#FF0000",
+             name: pName.trim().replace(/(<([^>]+)>)/gi, ""),
+             price, originalPrice: price, discount: 0,
+             url: pUrl,
+             image: pImg,
+             rating: 0, reviewCount: 0, availability: true
+           });
+       }
+    }
+    return items;
+  } catch (e) {
+    console.warn("[روژا] خطا:", e.message);
+    return [];
+  }
+}
+    });
+    if (!response.ok) return [];
+    const resData = await response.json();
     let items = [];
     if (resData?.data?.products?.data) {
        items = resData.data.products.data;
