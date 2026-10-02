@@ -6,6 +6,34 @@
 (function () {
   "use strict";
 
+  const piqoSiteOrigins = new Set(["https://piqoo.ir", "https://www.piqoo.ir"]);
+  const isPiqoSite = piqoSiteOrigins.has(window.location.origin);
+
+  if (isPiqoSite) {
+    window.addEventListener("message", (event) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (event.data?.source !== "piqo-site" || event.data?.type !== "PIQO_REQUEST_ONBOARDING_PRODUCTS") return;
+
+      const queries = [
+        "گوشی موبایل سامسونگ",
+        "هدفون بلوتوثی انکر",
+        "لپ تاپ لنوو",
+        "سرخ کن فیلیپس",
+      ];
+
+      chrome.runtime.sendMessage({ type: "GET_ONBOARDING_PRODUCTS", queries }, (response) => {
+        if (chrome.runtime.lastError || !Array.isArray(response?.products)) return;
+        window.postMessage({
+          source: "piqo-extension",
+          type: "PIQO_ONBOARDING_PRODUCTS",
+          products: response.products,
+        }, window.location.origin);
+      });
+    });
+
+    window.postMessage({ source: "piqo-extension", type: "PIQO_EXTENSION_READY" }, window.location.origin);
+  }
+
   // ==============================
   // پاکسازی نام محصول برای جستجوی دقیق‌تر
   // ==============================
@@ -99,7 +127,10 @@
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
-  function init() { scheduleDetection(); }
+  function init() {
+    if (isPiqoSite) return;
+    scheduleDetection();
+  }
 
 let detectionInterval = null;
   function scheduleDetection() {
@@ -136,7 +167,9 @@ let detectionInterval = null;
     const hostname = window.location.hostname;
     let product = null;
 
-    if (hostname.includes("digikala.com")) {
+    if (hostname === "piqoo.ir" || hostname === "www.piqoo.ir") {
+      product = null;
+    } else if (hostname.includes("digikala.com")) {
       product = extractDigikala();
     } else if (hostname.includes("torob.com")) {
       product = extractTorob();

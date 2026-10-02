@@ -32,7 +32,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
   });
 
   await chrome.tabs.create({
-    url: chrome.runtime.getURL('onboarding/onboarding.html'),
+    url: 'https://piqoo.ir/install-extension',
   });
 });
 
