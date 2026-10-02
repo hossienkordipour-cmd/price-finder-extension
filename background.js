@@ -995,41 +995,6 @@ async function searchRojashop(productName) {
     return [];
   }
 }
-    });
-    if (!response.ok) return [];
-    const resData = await response.json();
-    let items = [];
-    if (resData?.data?.products?.data) {
-       items = resData.data.products.data;
-    } else if (Array.isArray(resData?.data?.products)) {
-       items = resData.data.products;
-    } else if (Array.isArray(resData?.products)) {
-       items = resData.products;
-    }
-    
-    return items.map(item => {
-      const priceVal = item.price || item.discounted_price || item.final_price || 0;
-      let price = parsePrice(priceVal, "TOMAN");
-      // Sometime Rojashop returns price as "12,000 تومان". parsePrice handles non-digits.
-      if (price === 0) return null;
-      
-      const imgUrl = item.image || item.thumbnail || "";
-      const url = item.slug ? `https://rojashop.com/product/${item.slug}` : (item.url || `https://rojashop.com/search?q=${query}`);
-      
-      return {
-        store: "روژا", storeColor: "#FF0000",
-        name: item.title || item.name || productName,
-        price, originalPrice: price, discount: 0,
-        url,
-        image: imgUrl,
-        rating: 0, reviewCount: 0, availability: item.in_stock !== false && item.stock !== 0
-      };
-    }).filter(p => p !== null).slice(0, 5);
-  } catch (e) {
-    console.warn("[روژا] خطا:", e.message);
-    return [];
-  }
-}
 
 // Dynamically set popup for restricted pages where content scripts can't run
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
