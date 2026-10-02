@@ -412,9 +412,46 @@ async function searchPricesFromStores(product, onProgress) {
     return { ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" };
   };
 
-  const sortAndDedupe = (results) => {
+    const sortAndDedupe = (results) => {
+    // --- SMART MERGE DIGIKALA ---
+    const affilioDigikalaUrls = new Map();
+    results.forEach(item => {
+      const isDk = item.store === "دیجی‌کالا" || item.store === "دیجی کالا";
+      if (item.source === "affilio" && isDk) {
+        let dkp = null;
+        if (item.productCode && item.productCode.match(/dkp-(\d+)/i)) dkp = item.productCode.match(/dkp-(\d+)/i)[1];
+        else if (item.sourceUrl && item.sourceUrl.match(/dkp-(\d+)/i)) dkp = item.sourceUrl.match(/dkp-(\d+)/i)[1];
+        else if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
+        
+        if (dkp) affilioDigikalaUrls.set(dkp, item.url);
+      }
+    });
+
     const uniqueByKey = new Map();
     results.forEach(item => {
+      const isDk = item.store === "دیجی‌کالا" || item.store === "دیجی کالا";
+      
+      if (isDk) {
+        // 1. Drop Affilio's raw Digikala items (we will merge their links into Direct Digikala)
+        if (item.source === "affilio") return;
+        
+        // 2. Drop Digipay's Digikala items to prevent duplicates (Direct Digikala is enough)
+        // searchDigipay sets url to mydigipay outbound links usually, or direct digikala.
+        // We can identify Direct Digikala because it has no source property and the url is digikala.com
+        if (!item.url || !item.url.includes("digikala.com/product/")) {
+            return; // Drop non-direct digikala items
+        }
+
+        // 3. SMART MERGE: Override Direct Digikala URL with Affilio URL if available
+        let dkp = null;
+        if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
+        if (dkp && affilioDigikalaUrls.has(dkp)) {
+          item.url = affilioDigikalaUrls.get(dkp);
+          item.isAffiliate = true;
+          // Note: We keep item.storeColor as Digikala red to maintain good UX
+        }
+      }
+
       const key = item.store + "|" + normalizeProductText(item.name) + "|" + item.price;
       const existing = uniqueByKey.get(key);
       if (!existing || (item.isAffiliate && !existing.isAffiliate)) {
