@@ -18,6 +18,24 @@ import {
 import { SearchResultCache } from './search-cache.js';
 import { PIQO_API_BASE_URL, parsePiqoApiResponse } from './piqo-api-client.js';
 
+const PIQO_ONBOARDING_STATE_KEY = 'piqoOnboardingState';
+
+chrome.runtime.onInstalled.addListener(async ({ reason }) => {
+  if (reason !== 'install') return;
+
+  await chrome.storage.local.set({
+    [PIQO_ONBOARDING_STATE_KEY]: {
+      completed: false,
+      nudgeShown: false,
+      installedAt: Date.now(),
+    },
+  });
+
+  await chrome.tabs.create({
+    url: chrome.runtime.getURL('onboarding/onboarding.html'),
+  });
+});
+
 // ==============================
 // Utility: Fetch with Timeout
 // ==============================
@@ -208,6 +226,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "CLEAR_API_LOGS") {
     clearApiLogs().then(() => sendResponse({ success: true }));
+    return true;
+  }
+
+  if (message.type === "GET_ONBOARDING_PRODUCTS") {
+    const queries = Array.isArray(message.queries)
+      ? message.queries.filter(query => typeof query === 'string' && query.trim()).slice(0, 4)
+      : [];
+
+    Promise.all(queries.map(async query => {
+      try {
+        const products = await searchDigikala(query);
+        return products.find(product => product.availability) || products[0] || null;
+      } catch {
+        return null;
+      }
+    })).then(products => sendResponse({ products }));
+
     return true;
   }
 
