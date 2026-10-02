@@ -389,6 +389,7 @@ async function searchPricesFromStores(product, onProgress) {
 
   const promises = [
     { name: "افیلیو", p: searchPiqoApi(product.name) },
+    { name: "اسنپ‌شاپ", p: searchSnappShopDirect(product.name) }, // Using direct API with raw name to avoid 0 results
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
