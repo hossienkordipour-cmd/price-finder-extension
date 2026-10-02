@@ -388,7 +388,7 @@ async function searchPricesFromStores(product, onProgress) {
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
 
   const promises = [
-    { name: "افیلیو", p: searchPiqoApi(searchName) },
+    { name: "افیلیو", p: searchPiqoApi(product.name) },
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
