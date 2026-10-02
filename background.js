@@ -387,9 +387,28 @@ async function searchPricesFromStores(product, onProgress) {
   const searchName = buildSearchQuery(product.name);
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
 
+  // Query Affilio with multiple variations to bypass its fragile search engine
+  const rawPrefix = product.name.split(' ').slice(0, 6).join(' '); // First 6 words (broad search)
+  const affilioPromise = Promise.allSettled([
+    searchPiqoApi(searchName), 
+    searchPiqoApi(product.name),
+    searchPiqoApi(rawPrefix)
+  ]).then(results => {
+    const combined = [];
+    results.forEach(res => {
+      if (res.status === 'fulfilled' && res.value) {
+        combined.push(...res.value);
+      }
+    });
+    // Deduplicate by URL to avoid huge arrays
+    const unique = new Map();
+    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    return [...unique.values()];
+  });
+
   const promises = [
-    { name: "افیلیو", p: searchPiqoApi(product.name) },
-    { name: "اسنپ‌شاپ", p: searchSnappShopDirect(product.name) }, // Using direct API with raw name to avoid 0 results
+    { name: "افیلیو", p: affilioPromise },
+    { name: "اسنپ‌شاپ", p: searchSnappShopDirect(rawPrefix) }, // Using direct API with raw name to avoid 0 results
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
