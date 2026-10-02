@@ -412,12 +412,14 @@ async function searchPricesFromStores(product, onProgress) {
     return { ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" };
   };
 
-    const sortAndDedupe = (results) => {
+      const sortAndDedupe = (results) => {
     // --- SMART MERGE DIGIKALA ---
     const affilioDigikalaUrls = new Map();
     results.forEach(item => {
-      const isDk = item.store === "دیجی‌کالا" || item.store === "دیجی کالا";
-      if (item.source === "affilio" && isDk) {
+      // Normalize store name globally
+      if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
+      
+      if (item.source === "affilio" && item.store === "دیجی‌کالا") {
         let dkp = null;
         if (item.productCode && item.productCode.match(/dkp-(\d+)/i)) dkp = item.productCode.match(/dkp-(\d+)/i)[1];
         else if (item.sourceUrl && item.sourceUrl.match(/dkp-(\d+)/i)) dkp = item.sourceUrl.match(/dkp-(\d+)/i)[1];
@@ -427,28 +429,35 @@ async function searchPricesFromStores(product, onProgress) {
       }
     });
 
-    const uniqueByKey = new Map();
+        const uniqueByKey = new Map();
+    const seenDkps = new Set(); // To guarantee we never show the same DKP twice
+
     results.forEach(item => {
-      const isDk = item.store === "دیجی‌کالا" || item.store === "دیجی کالا";
+      // Normalize store name globally
+      if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
       
-      if (isDk) {
-        // 1. Drop Affilio's raw Digikala items (we will merge their links into Direct Digikala)
+      if (item.store === "دیجی‌کالا") {
+        // 1. Drop Affilio's raw Digikala items
         if (item.source === "affilio") return;
         
-        // 2. Drop Digipay's Digikala items to prevent duplicates (Direct Digikala is enough)
-        // searchDigipay sets url to mydigipay outbound links usually, or direct digikala.
-        // We can identify Direct Digikala because it has no source property and the url is digikala.com
-        if (!item.url || !item.url.includes("digikala.com/product/")) {
-            return; // Drop non-direct digikala items
+        // 2. Drop Digikala items from Torob or Emalls (we fetch direct)
+        // searchTorob and searchEmalls set their URLs to torob.com and emalls.ir
+        if (item.url && (item.url.includes("torob.com") || item.url.includes("emalls.ir"))) {
+            return;
         }
 
-        // 3. SMART MERGE: Override Direct Digikala URL with Affilio URL if available
         let dkp = null;
         if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
-        if (dkp && affilioDigikalaUrls.has(dkp)) {
-          item.url = affilioDigikalaUrls.get(dkp);
-          item.isAffiliate = true;
-          // Note: We keep item.storeColor as Digikala red to maintain good UX
+        
+        if (dkp) {
+            if (seenDkps.has(dkp)) return; // DROP absolute duplicates
+            seenDkps.add(dkp);
+            
+            // 3. SMART MERGE: Override Direct Digikala URL with Affilio URL if available
+            if (affilioDigikalaUrls.has(dkp)) {
+              item.url = affilioDigikalaUrls.get(dkp);
+              item.isAffiliate = true;
+            }
         }
       }
 
@@ -458,6 +467,7 @@ async function searchPricesFromStores(product, onProgress) {
         uniqueByKey.set(key, item);
       }
     });
+    
     const unique = [...uniqueByKey.values()];
     unique.sort((a, b) => Number(b.availability) - Number(a.availability) || Number(a.condition === "used") - Number(b.condition === "used") || a.price - b.price || b.matchScore - a.matchScore);
     return unique;
