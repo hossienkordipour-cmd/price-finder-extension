@@ -607,6 +607,11 @@ function injectFloatingButton() {
     gap: 6px;
   `;
 
+  
+  const manifestName = chrome.runtime.getManifest().name;
+  const isDev = manifestName.includes("DEV");
+  const bgColor = isDev ? "#808080" : "#22F498";
+
   wrapper.innerHTML = `
     <style>
       #piqo-widget-container .piqo-control {
@@ -621,7 +626,8 @@ function injectFloatingButton() {
       .piqo-btn-core {
         width: 54px;
         height: 54px;
-        background: #22F498;
+        background: ${bgColor};
+
         border-radius: 27px 0 0 27px;
         box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.15);
         display: flex;
