@@ -438,8 +438,8 @@ async function searchPricesFromStores(product, onProgress) {
       if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
       
       if (item.store === "دیجی‌کالا") {
-        // 1. Drop Affilio's raw Digikala items
-        if (item.source === "affilio") return;
+        // 1. Drop Affilio's raw Digikala items (but keep merged ones)
+        if (item.source === "affilio" && !item.isMerged) return;
         
         // 2. Drop Digikala items from Torob or Emalls (we fetch direct)
         // searchTorob and searchEmalls set their URLs to torob.com and emalls.ir
@@ -458,6 +458,8 @@ async function searchPricesFromStores(product, onProgress) {
             if (affilioDigikalaUrls.has(dkp)) {
               item.url = affilioDigikalaUrls.get(dkp);
               item.isAffiliate = true;
+              item.source = "affilio"; // This forces the Affilio badge to appear in the UI
+              item.isMerged = true; // Protect it from being dropped in subsequent renders
             }
         }
       }
