@@ -16,6 +16,8 @@ import {
   readApiLogs,
 } from './api-logger.js';
 import { SearchResultCache } from './search-cache.js';
+
+let globalAffilioPrefix = null; // Cache for universal dynamic affiliate links
 import { PIQO_API_BASE_URL, parsePiqoApiResponse } from './piqo-api-client.js';
 
 const PIQO_ONBOARDING_STATE_KEY = 'piqoOnboardingState';
@@ -433,53 +435,52 @@ async function searchPricesFromStores(product, onProgress) {
   };
 
       const sortAndDedupe = (results) => {
-    // --- SMART MERGE DIGIKALA ---
-    const affilioDigikalaUrls = new Map();
+    // 1. Extract and cache Affilio Token Prefix
     results.forEach(item => {
-      // Normalize store name globally
       if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
+      if (item.store === "اسنپ شاپ") item.store = "اسنپ‌شاپ";
       
-      if (item.source === "affilio" && item.store === "دیجی‌کالا") {
-        let dkp = null;
-        if (item.productCode && item.productCode.match(/dkp-(\d+)/i)) dkp = item.productCode.match(/dkp-(\d+)/i)[1];
-        else if (item.sourceUrl && item.sourceUrl.match(/dkp-(\d+)/i)) dkp = item.sourceUrl.match(/dkp-(\d+)/i)[1];
-        else if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
-        
-        if (dkp) affilioDigikalaUrls.set(dkp, item.url);
+      if (item.source === "affilio" && item.url && item.url.includes("publisher.affilio.ir")) {
+        const pIndex = item.url.indexOf("&p=");
+        if (pIndex !== -1) {
+            let prefix = item.url.substring(0, pIndex);
+            prefix = prefix.replace(/&utm_term=[^&]*/, "");
+            globalAffilioPrefix = prefix; // Save globally for all future products!
+        }
       }
     });
 
-        const uniqueByKey = new Map();
-    const seenDkps = new Set(); // To guarantee we never show the same DKP twice
+    const uniqueByKey = new Map();
+    const seenDkps = new Set(); 
 
     results.forEach(item => {
-      // Normalize store name globally
       if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
+      if (item.store === "اسنپ شاپ") item.store = "اسنپ‌شاپ";
       
-      if (item.store === "دیجی‌کالا") {
-        // 1. Drop Affilio's raw Digikala items (but keep merged ones)
+      const isTargetStore = item.store === "دیجی‌کالا" || item.store === "اسنپ‌شاپ";
+
+      if (isTargetStore) {
+        // 1. Drop Affilio's raw items (but keep merged ones)
         if (item.source === "affilio" && !item.isMerged) return;
         
-        // 2. Drop Digikala items from Torob or Emalls (we fetch direct)
-        // searchTorob and searchEmalls set their URLs to torob.com and emalls.ir
-        if (item.url && (item.url.includes("torob.com") || item.url.includes("emalls.ir"))) {
-            return;
+        // 2. Digikala specific deduplication
+        if (item.store === "دیجی‌کالا") {
+            if (item.url && (item.url.includes("torob.com") || item.url.includes("emalls.ir"))) return;
+            
+            let dkp = null;
+            if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
+            if (dkp) {
+                if (seenDkps.has(dkp)) return; // DROP absolute duplicates
+                seenDkps.add(dkp);
+            }
         }
 
-        let dkp = null;
-        if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
-        
-        if (dkp) {
-            if (seenDkps.has(dkp)) return; // DROP absolute duplicates
-            seenDkps.add(dkp);
-            
-            // 3. SMART MERGE: Override Direct Digikala URL with Affilio URL if available
-            if (affilioDigikalaUrls.has(dkp)) {
-              item.url = affilioDigikalaUrls.get(dkp);
-              item.isAffiliate = true;
-              item.source = "affilio"; // This forces the Affilio badge to appear in the UI
-              item.isMerged = true; // Protect it from being dropped in subsequent renders
-            }
+        // 3. UNIVERSAL AFFILIATE UPGRADE
+        if (globalAffilioPrefix && !item.isAffiliate && item.url && !item.url.includes("publisher.affilio.ir")) {
+            item.url = `${globalAffilioPrefix}&utm_term=${encodeURIComponent(item.name)}&p=${item.url}`;
+            item.isAffiliate = true;
+            item.source = "affilio"; // This forces the Affilio badge to appear in the UI
+            item.isMerged = true; // Protect it from being dropped in subsequent renders
         }
       }
 
