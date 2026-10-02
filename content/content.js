@@ -545,6 +545,7 @@ function togglePiqoPopup(isLeft) {
       widget.style.transition = 'opacity 0.2s ease';
       widget.style.opacity = '0';
       widget.style.pointerEvents = 'none';
+      widget.querySelector('#piqo-main-btn')?.setAttribute('aria-expanded', 'true');
     }
 
     // force reflow
@@ -559,6 +560,7 @@ function togglePiqoPopup(isLeft) {
     if (widget) {
       widget.style.opacity = '1';
       widget.style.pointerEvents = 'auto';
+      widget.querySelector('#piqo-main-btn')?.setAttribute('aria-expanded', 'false');
     }
 
     setTimeout(() => {
@@ -581,6 +583,7 @@ window.addEventListener('message', (event) => {
       if (widget) {
         widget.style.opacity = '1';
         widget.style.pointerEvents = 'auto';
+        widget.querySelector('#piqo-main-btn')?.setAttribute('aria-expanded', 'false');
       }
       
       setTimeout(() => { popup.style.display = 'none'; }, 300);
@@ -627,14 +630,19 @@ function injectFloatingButton() {
         width: 54px;
         height: 54px;
         background: ${bgColor};
-
+        padding: 0;
+        border: 0;
         border-radius: 27px 0 0 27px;
         box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.15);
         display: flex;
         align-items: center;
         justify-content: center;
+        gap: 0;
+        overflow: hidden;
         cursor: pointer;
-        transition: border-radius 0.3s ease, filter 0.2s ease;
+        color: #081011;
+        font-family: Tahoma, Arial, sans-serif;
+        transition: border-radius 0.3s ease, filter 0.2s ease, width 0.45s cubic-bezier(0.22, 1, 0.36, 1), padding 0.45s cubic-bezier(0.22, 1, 0.36, 1), gap 0.45s cubic-bezier(0.22, 1, 0.36, 1);
       }
       .piqo-btn-core:hover {
         filter: brightness(1.04);
@@ -646,8 +654,31 @@ function injectFloatingButton() {
       }
       .piqo-logo-mark {
         display: block;
+        flex: 0 0 auto;
         width: 21px;
         height: 26px;
+      }
+      .piqo-onboarding-label {
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+        direction: rtl;
+        white-space: nowrap;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1;
+        transition: max-width 0.35s ease, opacity 0.2s ease;
+      }
+      #piqo-widget-container.piqo-onboarding-nudge .piqo-btn-core {
+        width: 190px;
+        justify-content: flex-start;
+        gap: 12px;
+        padding: 0 17px 0 18px;
+      }
+      #piqo-widget-container.piqo-onboarding-nudge .piqo-onboarding-label {
+        max-width: 125px;
+        opacity: 1;
+        transition-delay: 0.12s;
       }
       #piqo-widget-container.piqo-left .piqo-logo-mark {
         margin-left: -4px;
@@ -684,6 +715,12 @@ function injectFloatingButton() {
         align-items: center;
         justify-content: center;
       }
+      @media (prefers-reduced-motion: reduce) {
+        .piqo-btn-core,
+        .piqo-onboarding-label {
+          transition-duration: 0.01ms !important;
+        }
+      }
     </style>
     
     <div class="piqo-control piqo-close-btn" id="piqo-close" title="بستن موقت قیمت‌یاب">✕</div>
@@ -694,13 +731,14 @@ function injectFloatingButton() {
           <circle cx="8" cy="4" r="1.5"/><circle cx="8" cy="8" r="1.5"/><circle cx="8" cy="12" r="1.5"/>
         </svg>
       </div>
-      <div class="piqo-btn-core" id="piqo-main-btn">
+      <button class="piqo-btn-core" id="piqo-main-btn" type="button" aria-label="باز کردن پیکو و مقایسه قیمت" aria-expanded="false">
         <svg class="piqo-logo-mark" viewBox="0 0 510 626" aria-hidden="true" focusable="false">
           <path fill="#081011" d="M0 239h145v314a72.5 72.5 0 0 1-145 0z"/>
           <path fill="#081011" fill-rule="evenodd"
             d="M0 239a255 239 0 1 0 510 0A255 239 0 1 0 0 239Zm150 0a105 105 0 1 1 210 0 105 105 0 1 1-210 0Z"/>
         </svg>
-      </div>
+        <span class="piqo-onboarding-label">ارزون‌ترش هست؟</span>
+      </button>
       <div class="piqo-control piqo-grab" id="piqo-grab-right" style="display:none;">
         <svg width="12" height="16" viewBox="0 0 12 16" fill="#0A0A0A" style="opacity: 0.4;">
           <circle cx="4" cy="4" r="1.5"/><circle cx="4" cy="8" r="1.5"/><circle cx="4" cy="12" r="1.5"/>
@@ -722,6 +760,25 @@ function injectFloatingButton() {
   const closeBtn = wrapper.querySelector('#piqo-close');
   const grabLeft = wrapper.querySelector('#piqo-grab-left');
   const grabRight = wrapper.querySelector('#piqo-grab-right');
+
+  chrome.storage.local.get('piqoOnboardingState', (data) => {
+    if (chrome.runtime.lastError || !wrapper.isConnected) return;
+    const onboardingState = data.piqoOnboardingState;
+    if (!onboardingState || onboardingState.completed || onboardingState.nudgeShown) return;
+
+    wrapper.classList.add('piqo-onboarding-nudge');
+    chrome.storage.local.set({
+      piqoOnboardingState: {
+        ...onboardingState,
+        nudgeShown: true,
+        nudgeShownAt: Date.now(),
+      },
+    });
+
+    window.setTimeout(() => {
+      wrapper.classList.remove('piqo-onboarding-nudge');
+    }, 8000);
+  });
 
   wrapper.addEventListener('mousedown', (e) => {
     if (e.target.closest('#piqo-close')) return;
@@ -809,6 +866,18 @@ function injectFloatingButton() {
   // Open Sidebar Action
   mainBtn.addEventListener('click', (e) => {
     if (hasMoved) return; // Prevent opening if it was a drag
+    wrapper.classList.remove('piqo-onboarding-nudge');
+    chrome.storage.local.get('piqoOnboardingState', (data) => {
+      const onboardingState = data.piqoOnboardingState;
+      if (!onboardingState || onboardingState.completed) return;
+      chrome.storage.local.set({
+        piqoOnboardingState: {
+          ...onboardingState,
+          completed: true,
+          completedAt: Date.now(),
+        },
+      });
+    });
     togglePiqoPopup(wrapper.classList.contains('piqo-left'));
   });
 }
@@ -827,4 +896,3 @@ chrome.runtime.onMessage.addListener((message) => {
     togglePiqoPopup(isLeft);
   }
 });
-
