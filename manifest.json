@@ -5,7 +5,6 @@
   "version": "1.1.0",
   "description": "بهترین قیمت محصول را در فروشگاه‌های ایرانی پیدا کنید",
   "permissions": [
-    "activeTab",
     "storage",
     "tabs"
   ],
