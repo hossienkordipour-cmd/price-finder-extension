@@ -499,6 +499,7 @@ if (product && product.name) {
     let name = null;
     let price = null;
     let image = null;
+    let hasStructuredProduct = false;
 
     // 1. Try JSON-LD
     const scripts = document.querySelectorAll('script[type="application/ld+json"]');
@@ -511,6 +512,7 @@ if (product && product.name) {
         const productSchema = findProductSchema(data);
 
         if (productSchema) {
+          hasStructuredProduct = true;
           const p = productSchema;
           if (p.name) name = p.name;
           if (p.image) image = Array.isArray(p.image) ? p.image[0] : (typeof p.image === 'object' ? p.image.url : p.image);
@@ -545,7 +547,10 @@ if (product && product.name) {
     if (!name || name.length < 3) return null;
 
     // Ensure it's truly a product page (to avoid activating on random articles)
-    const isLikelyProduct = hasProductType || price > 0 || document.querySelector('[itemtype*="schema.org/Product"]');
+    const isLikelyProduct = hasStructuredProduct
+      || hasProductType
+      || price > 0
+      || document.querySelector('[itemtype*="schema.org/Product"]');
     if (!isLikelyProduct) return null;
 
     return { 
