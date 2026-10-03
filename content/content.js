@@ -47,6 +47,56 @@
     return url;
   }
 
+  const trackingQueryKeys = new Set([
+    "gclid",
+    "dclid",
+    "fbclid",
+    "msclkid",
+    "ttclid",
+    "twclid",
+    "_ga",
+    "_gl",
+    "mc_cid",
+    "mc_eid",
+    "referrer",
+    "affiliate",
+    "affiliate_id",
+    "aff_id",
+  ]);
+
+  function removeTrackingFromUrl(url) {
+    for (const key of [...url.searchParams.keys()]) {
+      const normalizedKey = key.toLowerCase();
+      if (normalizedKey.startsWith("utm_") || trackingQueryKeys.has(normalizedKey)) {
+        url.searchParams.delete(key);
+      }
+    }
+
+    const isSpaRoute = /^#(?:!\/|\/)/.test(url.hash);
+    if (!isSpaRoute) url.hash = "";
+    return url;
+  }
+
+  function getPrivacySafePageUrl() {
+    try {
+      const currentUrl = new URL(window.location.href);
+      const canonicalValue = document.querySelector('link[rel~="canonical"]')?.href;
+
+      if (canonicalValue) {
+        const canonicalUrl = new URL(canonicalValue, currentUrl);
+        const isSafeCanonical = ["http:", "https:"].includes(canonicalUrl.protocol)
+          && canonicalUrl.origin === currentUrl.origin;
+        if (isSafeCanonical) {
+          return removeTrackingFromUrl(canonicalUrl).toString();
+        }
+      }
+
+      return removeTrackingFromUrl(currentUrl).toString();
+    } catch {
+      return window.location.href;
+    }
+  }
+
   function getImageFromElement(element) {
     if (!element) return null;
     const srcSet = element.getAttribute("srcset") || element.getAttribute("data-srcset") || "";
@@ -186,6 +236,7 @@ let detectionInterval = null;
     }
 
 if (product && product.name) {
+      product.sourceUrl = getPrivacySafePageUrl();
       clearInterval(detectionInterval);
       const detectionKey = `${product.sourceUrl || location.href}|${product.name}|${product.price || ""}`;
       if (detectionKey !== lastDetectedKey) {
