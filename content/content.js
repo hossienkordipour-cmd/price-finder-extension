@@ -472,27 +472,46 @@ if (product && product.name) {
   // ==============================
   // عمومی (Schema.org)
   // ==============================
+  function hasSchemaType(node, expectedType) {
+    if (!node || typeof node !== "object") return false;
+    const types = Array.isArray(node["@type"]) ? node["@type"] : [node["@type"]];
+    const normalizedExpectedType = expectedType.toLowerCase();
+
+    return types.some(type => {
+      if (typeof type !== "string") return false;
+      const normalizedType = type.trim().toLowerCase();
+      const shortType = normalizedType.split(/[\/#]/).pop();
+      return shortType === normalizedExpectedType;
+    });
+  }
+
+  function findProductSchema(data) {
+    const candidates = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.["@graph"])
+        ? data["@graph"]
+        : [data];
+
+    return candidates.find(candidate => hasSchemaType(candidate, "Product")) || null;
+  }
+
   function extractGeneric() {
     let name = null;
     let price = null;
     let image = null;
 
     // 1. Try JSON-LD
-    try {
-      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
-      for (const script of scripts) {
-        const data = JSON.parse(script.textContent);
-        
-        let p = null;
-        if (Array.isArray(data)) {
-          p = data.find(x => x["@type"] === "Product");
-        } else if (data["@graph"]) {
-          p = data["@graph"].find(x => x["@type"] === "Product");
-        } else if (data["@type"] === "Product") {
-          p = data;
-        }
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const script of scripts) {
+      const rawJson = script.textContent?.trim();
+      if (!rawJson || !/product/i.test(rawJson)) continue;
 
-        if (p) {
+      try {
+        const data = JSON.parse(rawJson);
+        const productSchema = findProductSchema(data);
+
+        if (productSchema) {
+          const p = productSchema;
           if (p.name) name = p.name;
           if (p.image) image = Array.isArray(p.image) ? p.image[0] : (typeof p.image === 'object' ? p.image.url : p.image);
           
@@ -503,8 +522,10 @@ if (product && product.name) {
           }
           break;
         }
+      } catch {
+        // Ignore only the malformed JSON-LD block and continue with the rest.
       }
-    } catch (e) {}
+    }
 
     // 2. Try Open Graph / Microdata
     const hasProductType = document.querySelector('meta[property="og:type"]')?.content?.includes("product");
