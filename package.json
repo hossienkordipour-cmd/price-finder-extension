@@ -4,6 +4,7 @@
   "type": "module",
   "main": "background.js",
   "scripts": {
+    "build:dev": "node scripts/build-extension.mjs dev",
     "test": "node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs && node test/piqo-api-client.test.mjs"
   },
   "repository": {
