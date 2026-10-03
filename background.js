@@ -420,7 +420,6 @@ async function searchPricesFromStores(product, onProgress) {
     { name: "مسترکالا", p: searchMasterKala(searchName) },
     { name: "دیجی‌پی", p: searchDigipay(searchName) },
     { name: "کالائوما", p: searchKalaoma(searchName) },
-    { name: "روژا", p: searchRojashop(searchName) },
   ];
 
   const allValidResults = [];
