@@ -479,7 +479,7 @@ async function searchPricesFromStores(product, onProgress) {
         if (globalAffilioPrefix && !item.isAffiliate && item.url && !item.url.includes("publisher.affilio.ir")) {
             item.url = `${globalAffilioPrefix}&utm_term=${encodeURIComponent(item.name)}&p=${item.url}`;
             item.isAffiliate = true;
-            item.source = "affilio"; // This forces the Affilio badge to appear in the UI
+            item.source = "affilio"; // Preserve the source after upgrading to an affiliate link
             item.isMerged = true; // Protect it from being dropped in subsequent renders
         }
       }
