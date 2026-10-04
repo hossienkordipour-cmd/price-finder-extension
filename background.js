@@ -410,7 +410,7 @@ async function searchPricesFromStores(product, onProgress) {
 
   const promises = [
     { name: "افیلیو", p: affilioPromise },
-    { name: "اسنپ‌شاپ", p: searchSnappShopDirect(rawPrefix) }, // Using direct API with raw name to avoid 0 results
+    // SnappShop direct search is paused; keep its results from the Affilio API.
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
@@ -459,8 +459,9 @@ async function searchPricesFromStores(product, onProgress) {
       const isTargetStore = item.store === "دیجی‌کالا" || item.store === "اسنپ‌شاپ";
 
       if (isTargetStore) {
-        // 1. Drop Affilio's raw items (but keep merged ones)
-        if (item.source === "affilio" && !item.isMerged) return;
+        // Only Digikala relies on direct results here. Preserve SnappShop's
+        // original Affilio offers and their supplied tracking links.
+        if (item.store === "دیجی‌کالا" && item.source === "affilio" && !item.isMerged) return;
         
         // 2. Digikala specific deduplication
         if (item.store === "دیجی‌کالا") {
