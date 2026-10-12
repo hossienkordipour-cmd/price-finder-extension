@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { parsePiqoApiResponse } from "../piqo-api-client.js";
+import { parsePiqoApiResponse, parsePiqoDivarResponse } from "../piqo-api-client.js";
 
 const results = parsePiqoApiResponse({
   results: [
@@ -38,5 +38,22 @@ assert.equal(results[0].productCode, "SKU-1");
 
 assert.deepEqual(parsePiqoApiResponse(null), []);
 assert.deepEqual(parsePiqoApiResponse({ results: "invalid" }), []);
+
+const divarResults = parsePiqoDivarResponse({
+  results: [{
+    name: "سامسونگ A55 کارکرده",
+    price: 20_000_000,
+    originalPrice: 20_000_000,
+    image: "https://s100.divarcdn.com/static/photo.jpg",
+    url: "https://divar.ir/v/example",
+    city: "tehran",
+    availability: true,
+  }],
+});
+
+assert.equal(divarResults.length, 1);
+assert.equal(divarResults[0].store, "دیوار");
+assert.equal(divarResults[0].condition, "used");
+assert.equal(divarResults[0].image, "https://s100.divarcdn.com/static/photo.jpg");
 
 console.log("PIQO API client tests passed");

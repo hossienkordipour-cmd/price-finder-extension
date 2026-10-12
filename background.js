@@ -18,7 +18,7 @@ import {
 import { SearchResultCache } from './search-cache.js';
 
 let globalAffilioPrefix = null; // Cache for universal dynamic affiliate links
-import { PIQO_API_BASE_URL, parsePiqoApiResponse } from './piqo-api-client.js';
+import { PIQO_API_BASE_URL, parsePiqoApiResponse, parsePiqoDivarResponse } from './piqo-api-client.js';
 
 const PIQO_ONBOARDING_STATE_KEY = 'piqoOnboardingState';
 
@@ -766,54 +766,19 @@ async function searchBasalam(productName) {
 }
 
 // ==============================
-// دیوار — API جستجو
+// دیوار — از طریق API پیکو و Divar MCP
 // ==============================
 async function searchDivar(productName) {
   try {
-    const url = "https://api.divar.ir/v8/postlist/w/search";
+    const url = `${PIQO_API_BASE_URL}/v1/divar/search?q=${encodeURIComponent(productName)}`;
     const response = await fetchWithTimeout(url, {
       logStore: "دیوار",
-      method: "POST",
       headers: {
-        "Content-Type": "application/json",
         "Accept": "application/json",
       },
-      body: JSON.stringify({
-        page: { page_number: 1 },
-        filters: { query: productName }
-      })
     });
-    
-    if (!response.ok) return [];
-
-    const data = await response.json();
-    const widgets = data?.list_widgets || [];
-    
-    return widgets.map(w => {
-      if (w.widget_type !== "POST_ROW") return null;
-      const item = w.data;
-      if (!item) return null;
-      
-      // قیمت در فیلد middle_description_text هست
-      const priceText = item.middle_description_text || "";
-      if (priceText.includes("توافقی") || priceText.includes("معاوضه") || !priceText.includes("تومان")) {
-        return null;
-      }
-      
-      const price = parsePrice(priceText, "TOMAN");
-      if (price === 0) return null;
-
-      const token = item.action?.payload?.token || item.token;
-      
-      return {
-        store: "دیوار", storeColor: "#A62626",
-        name: item.title || productName,
-        price, originalPrice: price, discount: 0,
-        url: token ? `https://divar.ir/v/${token}` : `https://divar.ir/s/iran?q=${encodeURIComponent(productName)}`,
-        image: item.image_url || "",
-        rating: 0, reviewCount: 0, availability: true, condition: "used",
-      };
-    }).filter(p => p !== null).slice(0, 5);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return parsePiqoDivarResponse(await response.json());
   } catch (e) {
     console.warn("[دیوار] خطا:", e.message);
     return [];
