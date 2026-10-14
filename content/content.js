@@ -151,7 +151,7 @@
     name = name.split("|")[0].trim();
     name = name.split("–")[0].trim();
     name = name.split(" - ترب")[0].trim();
-    name = name.replace(/\s*[\|ترب|دیجی‌کالا|ایمالز|باسلام]+\s*$/i, "").trim();
+    name = name.replace(/\s+(?:ترب|دیجی‌کالا|ایمالز|باسلام)\s*$/i, "").trim();
 
     // حذف فاصله‌های اضافه
     name = name.replace(/\s+/g, " ").trim();
@@ -162,23 +162,47 @@
   let lastUrl = location.href;
   let lastDetectedKey = null;
   let detectionTimer = null;
+  let metadataTimer = null;
+  let clearedPageUrl = null;
+
+  function notifyPageChanged() {
+    const url = removeTrackingFromUrl(new URL(location.href)).toString();
+    chrome.runtime.sendMessage({ type: 'PAGE_CHANGED', url });
+  }
+
+  function checkNavigation() {
+    if (location.href === lastUrl) return false;
+    lastUrl = location.href;
+    clearTimeout(metadataTimer);
+    lastDetectedKey = null;
+    clearedPageUrl = null;
+    removePiqoUI();
+    notifyPageChanged();
+    scheduleDetection();
+    return true;
+  }
 
 
   // نظارت بر تغییر URL (SPA)
-  const observer = new MutationObserver(() => {
-    if (location.href !== lastUrl) {
-      lastUrl = location.href;
-      lastDetectedKey = null; // Force reset on navigation
-      if (document.getElementById('piqo-widget-container')) {
-        removePiqoUI(); // Only clear if widget was present
-      }
-      scheduleDetection();
+  const observer = new MutationObserver((records) => {
+    if (checkNavigation()) return;
+    if (!isPiqoSite && records.some(record => {
+      const element = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+      return !element?.closest('#piqo-widget-container, #piqo-popup-iframe');
+    })) {
+      clearTimeout(metadataTimer);
+      metadataTimer = setTimeout(detectProduct, 250);
     }
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+  observer.observe(document.body, { childList: true, characterData: true, attributes: true, subtree: true });
 
   function init() {
     if (isPiqoSite) return;
+    notifyPageChanged();
+    window.addEventListener('popstate', checkNavigation);
+    window.addEventListener('hashchange', checkNavigation);
+    // pushState need not change the DOM; observe URLs without overriding sites' APIs.
+    setInterval(checkNavigation, 250);
     scheduleDetection();
   }
 
@@ -221,6 +245,10 @@ let detectionInterval = null;
       product = null;
     } else if (hostname.includes("digikala.com")) {
       product = extractDigikala();
+    } else if (/^(www\.)?technolife\.com$/.test(hostname)) {
+      product = extractTechnolife();
+    } else if (/^(www\.)?etkala\.ir$/.test(hostname)) {
+      product = extractEtkala();
     } else if (hostname.includes("torob.com")) {
       product = extractTorob();
     } else if (hostname.includes("emalls.ir")) {
@@ -236,9 +264,11 @@ let detectionInterval = null;
     }
 
 if (product && product.name) {
+      clearedPageUrl = null;
+      product.navigationUrl = removeTrackingFromUrl(new URL(location.href)).toString();
       product.sourceUrl = getPrivacySafePageUrl();
       clearInterval(detectionInterval);
-      const detectionKey = `${product.sourceUrl || location.href}|${product.name}|${product.price || ""}`;
+      const detectionKey = `${product.sourceUrl || location.href}|${product.name}|${product.price || ""}|${product.variantId || ""}|${product.image || ""}`;
       if (detectionKey !== lastDetectedKey) {
         console.log("[قیمت‌یاب] محصول:", product.name);
         lastDetectedKey = detectionKey;
@@ -249,6 +279,10 @@ if (product && product.name) {
         injectFloatingButton();
       }
     } else {
+      if (lastDetectedKey && clearedPageUrl !== location.href) {
+        clearedPageUrl = location.href;
+        chrome.runtime.sendMessage({ type: 'PRODUCT_CLEARED', url: removeTrackingFromUrl(new URL(location.href)).toString() });
+      }
       // Not a product page anymore (SPA navigation to home page, etc.)
       // Only remove if the floating widget is present (which means a product was previously detected).
       if (document.getElementById('piqo-widget-container')) {
@@ -260,7 +294,43 @@ if (product && product.name) {
   // ==============================
   // دیجی‌کالا
   // ==============================
+  function getDigikalaSelectedOffer() {
+    const isVisible = (element) => {
+      if (!element?.getClientRects().length) return false;
+      for (let parent = element; parent; parent = parent.parentElement) {
+        const style = window.getComputedStyle(parent);
+        if (style.display === 'none' || style.visibility === 'hidden' || parent.getAttribute('aria-hidden') === 'true') return false;
+      }
+      return true;
+    };
+    const buttons = document.querySelectorAll('[data-cro-id="pdp-add-to-cart"], [data-cro-id="pdp-mini-add-to-cart"]');
+    const primary = [...buttons].find(button => button.getAttribute('data-cro-id') === 'pdp-add-to-cart' && isVisible(button));
+    for (const button of primary ? [primary] : buttons) {
+      if (!isVisible(button) || button.disabled) continue;
+      const variantId = button.getAttribute('data-add-to-cart-variant-id');
+      for (let scope = button.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
+        // Stop before reaching a list of unrelated sellers or recommended products.
+        if (scope.querySelectorAll('button[data-testid="add-to-cart"]').length > 1) break;
+        const candidates = [...scope.querySelectorAll('[data-testid="price-final"]')].filter(isVisible);
+        if (!candidates.length) continue;
+        const prices = candidates.map(element => {
+          if (element.closest('del, s, .line-through') || window.getComputedStyle(element).textDecoration.includes('line-through')) return null;
+          const container = element.parentElement;
+          const iconUnit = container?.querySelector('dds-icon[name="value-toman"]') ? 'تومان' : '';
+          const unit = iconUnit || container?.textContent || '';
+          if (!/(?:تومان|ریال|\birr\b|\birt\b)/i.test(unit)) return null;
+          return parsePriceInTomans(element.textContent, unit);
+        }).filter(value => value > 0);
+        const uniquePrices = [...new Set(prices)];
+        return {price: uniquePrices.length === 1 ? uniquePrices[0] : null, variantId};
+      }
+      return {price: null, variantId};
+    }
+    return {price: null, variantId: null};
+  }
+
   function extractDigikala() {
+    if (!/^\/product\/dkp-\d+/.test(window.location.pathname)) return null;
     let name = null, price = null, image = null;
 
     // H1 is the most reliable source for current SPA state
@@ -316,71 +386,9 @@ if (product && product.name) {
       image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
     }
 
-    if (!price) {
-      const priceSelectors = [
-        '[data-testid="price-no-discount"]',
-        '[data-testid="price-discount"]',
-        '[data-cro="price"]',
-        '.text-h4.color-800',
-        '.text-h4.text-neutral-800',
-        '.text-h4.text-neutral-900',
-        '.text-h4.color-900',
-        'div[class*="price"] span[class*="text-h4"]'
-      ];
-      for (const sel of priceSelectors) {
-        const els = document.querySelectorAll(sel);
-        for (const el of els) {
-          if (el && el.textContent) {
-            const unitText = `${el.textContent} ${el.parentElement?.textContent || ""}`;
-            const hasKnownUnit = /(?:تومان|ریال|\birr\b|\brial\b)/i.test(unitText);
-            let txt = toEnglishDigits(el.textContent).replace(/[^0-9]/g, '');
-            // Price must be at least 4 digits (1,000 تومان)
-            if (txt.length > 3 && hasKnownUnit) {
-              const style = window.getComputedStyle(el);
-              if (style.textDecoration.includes('line-through') || el.classList.contains('line-through') || el.closest('del, s, .line-through')) continue;
-              if (el.tagName === 'H1' || el.closest('h1')) continue;
-              
-              price = parsePriceInTomans(txt, unitText);
-              break;
-            }
-          }
-        }
-        if (price) break;
-      }
-    }
+    const selectedOffer = getDigikalaSelectedOffer();
+    price = selectedOffer.price;
 
-    // Absolute Final DOM Scanner (The Toman strategy)
-    if (!price || isNaN(price) || price === 0) {
-      const btn = Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('سبد خرید'));
-      const scope = btn ? (btn.closest('article') || btn.closest('div[class*="flex"]')?.parentElement || document.body) : document.body;
-      
-      const tomans = Array.from(scope.querySelectorAll('*')).filter(el => {
-          return el.childNodes.length === 1 && el.textContent.trim().includes('تومان');
-      });
-      
-      let bestPrice = null;
-      for (const t of tomans) {
-          let text = toEnglishDigits(t.textContent).replace(/[^0-9]/g, '');
-          let prevText = t.previousElementSibling ? toEnglishDigits(t.previousElementSibling.textContent).replace(/[^0-9]/g, '') : '';
-          
-          let priceNum = 0;
-          let targetEl = null;
-          
-          if (prevText.length >= 4) {
-              priceNum = parseInt(prevText);
-              targetEl = t.previousElementSibling;
-          } else if (text.length >= 4) {
-              priceNum = parseInt(text);
-              targetEl = t;
-          }
-          
-          if (priceNum > 50000 && targetEl) {
-             if (targetEl.closest('del, s, .line-through') || window.getComputedStyle(targetEl).textDecoration.includes('line-through')) continue;
-             if (!bestPrice || priceNum < bestPrice) bestPrice = priceNum; 
-          }
-      }
-      if (bestPrice) price = bestPrice;
-    }
 
     if (name) name = cleanProductName(name);
 
@@ -389,6 +397,7 @@ if (product && product.name) {
 
     return {
       name, image, source: "digikala", store: "دیجی‌کالا", sourceUrl: window.location.href,
+      variantId: selectedOffer.variantId,
       price: price ? parsePriceInTomans(price, "تومان") : null,
     };
   }
@@ -495,6 +504,76 @@ if (product && product.name) {
     return candidates.find(candidate => hasSchemaType(candidate, "Product")) || null;
   }
 
+  function extractTechnolife() {
+    if (!/^\/product-\d+(?:\/|$)/.test(location.pathname)) return null;
+    const name = cleanProductName(document.querySelector('h1')?.textContent?.trim());
+    if (!name) return null;
+    const isVisible = element => {
+      if (!element?.getClientRects().length) return false;
+      for (let parent = element; parent; parent = parent.parentElement) {
+        const style = getComputedStyle(parent);
+        if (style.display === 'none' || style.visibility === 'hidden' || parent.getAttribute('aria-hidden') === 'true') return false;
+      }
+      return true;
+    };
+    const carts = [...document.querySelectorAll('button')].filter(button => button.textContent.includes('افزودن به سبد خرید'));
+    const primary = carts.find(button => button.querySelector('svg.icon-pdpCart') && isVisible(button));
+    let price = null;
+    if (primary && !primary.disabled) {
+      for (let scope = primary.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
+        if (carts.filter(button => scope.contains(button)).length > 1) break;
+        const amounts = [...scope.querySelectorAll('p, span')].filter(element => {
+          const unit = element.nextElementSibling?.textContent.trim();
+          // Insurance is a separate charge inside the same purchase card.
+          // Ignore its subtree, not the whole card (which also contains the cart).
+          for (let parent = element.parentElement; parent && parent !== scope; parent = parent.parentElement) {
+            if (!parent.contains(primary) && /بیمه/.test(parent.textContent)) return false;
+          }
+          return isVisible(element) && !element.closest('del, s, .line-through')
+            && !getComputedStyle(element).textDecoration.includes('line-through')
+            && /^[\d۰-۹٠-٩,٬\s]+$/.test(element.textContent.trim())
+            && /^(تومان|ریال)$/.test(unit || '') && isVisible(element.nextElementSibling);
+        }).map(element => parsePriceInTomans(element.textContent, element.nextElementSibling.textContent));
+        if (!amounts.length) continue;
+        const unique = [...new Set(amounts.filter(value => value > 0))];
+        price = unique.length === 1 ? unique[0] : null;
+        break;
+      }
+    }
+    // This site's JSON-LD currently labels toman amounts as IRR. Never use it
+    // as an unknown-price fallback or multiply guessed prices by ten.
+    return { name, price, image: getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content),
+      source: 'technolife', store: 'تکنولایف', sourceUrl: location.href };
+  }
+
+  function extractEtkala() {
+    if (!/^\/products\/\d+(?:\/|$)/.test(location.pathname)) return null;
+    const name = cleanProductName(document.querySelector('h1')?.textContent?.trim());
+    const photo = document.querySelector('img[alt="product-image-0"]');
+    // Generic OG tags describe the shop, not this product. Require its actual
+    // detail heading and gallery to avoid identifying error/category pages.
+    if (!name || !photo) return null;
+    const carts = [...document.querySelectorAll('button')].filter(e => e.textContent.trim() === 'افزودن به سبد خرید');
+    const prices = [];
+    for (const cart of carts) {
+      if (cart.disabled || !cart.getClientRects().length) continue;
+      let scope = cart.parentElement;
+      for (let depth = 0; scope && scope !== document.body && depth < 4; depth++, scope = scope.parentElement) {
+        const amounts = [...scope.querySelectorAll('.direction-reverse span.text-cool-gray-950')];
+        if (!amounts.length) continue;
+        for (const amount of amounts) {
+          if (!amount.getClientRects().length || amount.closest('del, s, .line-through')) continue;
+          const match = amount.textContent.trim().match(/^([\d۰-۹٠-٩,٬،\s]+)\s*(تومان|ریال)ء?$/);
+          if (match) prices.push(parsePriceInTomans(match[1], match[2]));
+        }
+        break;
+      }
+    }
+    const unique = [...new Set(prices.filter(value => value > 0))];
+    return { name, price: unique.length === 1 ? unique[0] : null,
+      image: getAbsoluteUrl(getImageFromElement(photo)), source: 'etkala', store: 'ات‌کالا', sourceUrl: location.href };
+  }
+
   function extractGeneric() {
     let name = null;
     let price = null;
@@ -571,26 +650,77 @@ if (product && product.name) {
 
     let name = document.querySelector("h1")?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
-    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+    const listingPhoto = value => {
+      try {
+        const url = new URL(value, location.href);
+        return url.protocol === 'https:' && !url.username && !url.password
+          && (url.hostname === 'divarcdn.com' || url.hostname.endsWith('.divarcdn.com'))
+          && url.pathname.startsWith('/static/photo/') ? url.href : null;
+      } catch { return null; }
+    };
+    let image = null;
+    for (const element of document.querySelectorAll('img.kt-image-block__image')) {
+      image = listingPhoto(getImageFromElement(element));
+      if (image) break;
+    }
+    if (!image) image = listingPhoto(getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content));
 
+    let price = null;
+    const prices = [];
+    for (const row of document.querySelectorAll('.kt-unexpandable-row')) {
+      const label = (row.querySelector('.kt-unexpandable-row__title')?.textContent || '')
+        .replace(/[\u200e\u200f\u202a-\u202e]/g, '').replace(/[\u200c\u200d]/g, ' ')
+        .replace(/[يى]/g, 'ی').replace(/ك/g, 'ک').replace(/[:：]\s*$/, '').replace(/\s+/g, ' ').trim();
+      // Only total sale-price fields. Rent, deposit, installments and per-unit
+      // amounts have different meanings and must not become the base price.
+      if (!/^قیمت(?:\s+(?:پایه|کل))?$/.test(label)) continue;
+      if (!row.getClientRects().length || getComputedStyle(row).visibility === 'hidden') continue;
+      const text = row.querySelector('.kt-unexpandable-row__value')?.textContent.replace(/[\u200e\u200f\u202a-\u202e]/g, '').trim() || '';
+      const match = text.match(/^([\d۰-۹٠-٩,٬\s]+)\s*(تومان|ریال)(?:\s*\(مقطوع\))?$/);
+      if (!match) { prices.push(null); continue; }
+      const value = parsePriceInTomans(match[1], match[2]);
+      prices.push(value > 0 ? value : null);
+    }
+    if (prices.length && prices.every(value => value === prices[0])) price = prices[0];
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "divar", store: "دیوار", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "divar", store: "دیوار", sourceUrl: window.location.href, price };
   }
 
   // ==============================
   // شیپور
   // ==============================
   function extractSheypoor() {
-    if (window.location.pathname === "/" || window.location.pathname.toLowerCase().includes("search") || window.location.pathname.includes("/s/")) return null;
+    if (!/^\/v\/.+-\d+\.html$/.test(window.location.pathname)) return null;
 
     let name = document.querySelector("h1")?.textContent?.trim()
       || document.querySelector('meta[property="og:title"]')?.content;
     const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
 
+    let price = null;
+    const heading = document.querySelector('h1');
+    for (let scope = heading?.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
+      if (scope.querySelectorAll('h1').length > 1) break;
+      // Verified current Sheypoor hero-price format; never scan description
+      // amounts or use recommended listings as an unknown-price fallback.
+      const candidates = [...scope.querySelectorAll('strong [class*="!text-heading-3-bolder"]')];
+      if (!candidates.length) continue;
+      if (candidates.length !== 1) break;
+      const element = candidates[0];
+      if (!element.getClientRects().length || getComputedStyle(element).visibility === 'hidden') break;
+      const text = element.textContent.replace(/[\u200e\u200f\u202a-\u202e]/g, '').trim();
+      const match = text.match(/^([\d۰-۹٠-٩,٬\s]+)\s*(تومان|ریال)?$/);
+      // The SVG in this specific hero-price component is the site's toman glyph.
+      const unit = match?.[2] || (element.querySelector('svg') ? 'تومان' : null);
+      if (match && unit) {
+        const value = parsePriceInTomans(match[1], unit);
+        price = value > 0 ? value : null;
+      }
+      break;
+    }
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "sheypoor", store: "شیپور", sourceUrl: window.location.href, price: null };
+    return { name, image, source: "sheypoor", store: "شیپور", sourceUrl: window.location.href, price };
   }
   init();
 })();

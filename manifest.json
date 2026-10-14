@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "PIQO — مقایسه قیمت هوشمند",
-  "short_name": "قیمت‌یاب",
+  "name": "پیکو | PIQO — مقایسه قیمت",
+  "short_name": "پیکو",
   "version": "1.1.0",
-  "description": "بهترین قیمت محصول را در فروشگاه‌های ایرانی پیدا کنید",
+  "description": "قیمت محصول را در فروشگاه‌های ایرانی مقایسه کن و گزینه مناسب خرید را پیدا کن.",
   "permissions": [
     "storage",
     "tabs"
@@ -17,10 +17,11 @@
     "https://api.divar.ir/*",
     "https://divar.ir/*",
     "https://*.sheypoor.com/*",
-    "https://*.snappshop.ir/*",
-    "https://*.khanoumi.com/*",
-    "https://*.technolife.ir/*",
     "https://*.mydigipay.com/*",
+    "http://amiirstore.com/*",
+    "https://amiirstore.com/*",
+    "http://www.amiirstore.com/*",
+    "https://www.amiirstore.com/*",
     "https://*.masterkala.com/*",
     "https://kalaoma.com/*"
   ],
@@ -46,7 +47,7 @@
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "قیمت‌یاب"
+    "default_title": "پیکو"
   },
   "icons": {
     "16": "icons/icon16.png",

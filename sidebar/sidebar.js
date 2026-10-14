@@ -118,6 +118,27 @@ chrome.runtime.onMessage.addListener((message) => {
   if (!Number.isInteger(currentTabId) || message.tabId !== currentTabId) return;
   if (message.requestId && message.requestId < latestRequestId) return;
 
+  if (message.type === 'PAGE_CHANGED') {
+    latestRequestId = message.requestId || latestRequestId;
+    currentProduct = null;
+    allResults = [];
+    currentProductEl.innerHTML = '';
+    currentProductEl.classList.add('hidden');
+    resultsListEl.innerHTML = '';
+    resultsState.classList.add('hidden');
+    loadingState.classList.add('hidden');
+    errorState.classList.add('hidden');
+    emptyState.classList.remove('hidden');
+    return;
+  }
+
+  if (message.type === "PRODUCT_METADATA_UPDATED") {
+    currentProduct = message.product;
+    currentProductEl.innerHTML = generateCardHtml(currentProduct, true);
+    currentProductEl.classList.remove("hidden");
+    if (!resultsState.classList.contains("hidden")) renderResults(allResults, !loadingState.classList.contains("hidden"));
+  }
+
   if (message.type === "PRODUCT_UPDATED") {
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product;
@@ -128,6 +149,7 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (message.type === "SEARCH_STARTED") {
     latestRequestId = message.requestId || latestRequestId;
+    currentProduct = message.product || currentProduct;
     allResults = [];
     showLoading();
   }
@@ -149,7 +171,7 @@ function formatPrice(p) {
 
 function generateCardHtml(item, isBase = false) {
   let discountHtml = "";
-  if (!isBase && currentProduct && currentProduct.price && item.price < currentProduct.price) {
+  if (!isBase && !item.suppressSavings && currentProduct && currentProduct.price && item.price < currentProduct.price) {
     const diff = Math.round(((currentProduct.price - item.price) / currentProduct.price) * 100);
     if (diff > 0) {
       discountHtml = `<div class="card-discount">${diff.toLocaleString("fa-IR")}٪ ارزان تر</div>`;
@@ -177,7 +199,7 @@ function generateCardHtml(item, isBase = false) {
           <div class="card-price">${formatPrice(item.price)}<span>تومان</span></div>
           ${discountHtml ? discountHtml.replace('class="card-discount"', 'class="card-discount bottom-discount"') : ''}
         </div>
-        ` : ''}
+        ` : (isBase ? '<div class="card-bottom"><div class="card-price">قیمت نامشخص</div></div>' : '')}
       </div>
     </${tag}>
   `;
@@ -235,11 +257,12 @@ function renderResults(results, isLoading = false) {
   if (!condItems.includes("new")) filtered = filtered.filter(r => r.condition === "used");
   if (!condItems.includes("used")) filtered = filtered.filter(r => r.condition !== "used");
 
-  const sort = sortFilter.dataset.value;
+  const sort = sortFilter.dataset.value || "match";
+  const sortablePrice = item => Number.isFinite(item.price) && item.price > 0 ? item.price : Infinity;
   if (sort === "cheap") {
-    filtered.sort((a, b) => a.price - b.price);
+    filtered.sort((a, b) => sortablePrice(a) - sortablePrice(b));
   } else if (sort === "match") {
-    filtered.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+    filtered.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0) || sortablePrice(a) - sortablePrice(b));
   }
 
   // Update results count
@@ -276,11 +299,11 @@ function renderResults(results, isLoading = false) {
     clearBtn.addEventListener('click', () => {
       // Reset Sort
       const sortDropdown = document.getElementById('sort-filter');
-      sortDropdown.dataset.value = 'cheap';
-      sortDropdown.querySelector('.header-text') ? sortDropdown.querySelector('.header-text').innerText = 'ارزان ترین' : sortDropdown.querySelector('.dropdown-header').innerText = 'ارزان ترین';
+      sortDropdown.dataset.value = 'match';
+      sortDropdown.querySelector('.header-text') ? sortDropdown.querySelector('.header-text').innerText = 'مرتبط ترین' : sortDropdown.querySelector('.dropdown-header').innerText = 'مرتبط ترین';
       sortDropdown.querySelectorAll('.dropdown-item').forEach(i => {
         i.classList.remove('selected');
-        if (i.dataset.value === 'cheap') i.classList.add('selected');
+        if (i.dataset.value === 'match') i.classList.add('selected');
       });
 
       // Reset Condition
@@ -300,6 +323,7 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
   if (chrome.runtime.lastError || !response) return;
   if (response.tabId) currentTabId = response.tabId;
   const state = response.state;
+  if (state?.requestId < latestRequestId) return;
   if (state && state.currentProduct) {
     latestRequestId = state.requestId || 0;
     currentProduct = state.currentProduct;

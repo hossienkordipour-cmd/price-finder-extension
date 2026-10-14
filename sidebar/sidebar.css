@@ -34,10 +34,20 @@ body {
 
 /* Header */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 1001;
+  background-color: var(--bg-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  /* Cover the edge gutters while keeping the original content start position. */
+  margin: -16px -16px 16px;
+  padding: 16px 16px 8px;
+}
+
+html {
+  scroll-padding-top: 64px;
 }
 .header-logo {
   display: flex;

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {readFile} from 'node:fs/promises';
+const source=await readFile(new URL('../sidebar/sidebar.js',import.meta.url),'utf8');
+const element=()=>({innerHTML:'old',classList:{add(){},remove(){}}});
+let onMessage,snapshot;
+const ctx={currentTabId:1,latestRequestId:42,currentProduct:{name:'old'},allResults:[{name:'old'}],currentProductEl:element(),resultsListEl:element(),resultsState:element(),loadingState:element(),errorState:element(),emptyState:element(),
+  generateCardHtml:p=>p.name,showLoading(){},showError(){},renderResults(){},chrome:{runtime:{onMessage:{addListener(fn){onMessage=fn}},sendMessage(m,cb){if(m.type==='GET_TAB_STATE')snapshot=cb}}}};
+vm.createContext(ctx);
+vm.runInContext(source.slice(source.indexOf('chrome.runtime.onMessage.addListener'),source.indexOf('\nfunction formatPrice')),ctx);
+onMessage({type:'PAGE_CHANGED',tabId:1,requestId:43});
+assert.equal(ctx.currentProduct,null);assert.equal(ctx.allResults.length,0);assert.equal(ctx.resultsListEl.innerHTML,'');
+onMessage({type:'PRODUCT_UPDATED',tabId:1,requestId:44,product:{name:'new'}});
+assert.equal(ctx.currentProduct.name,'new');
+onMessage({type:'RESULTS_UPDATED',tabId:1,requestId:42,results:[{name:'old'}]});
+assert.equal(ctx.allResults.length,0,'Old results cannot repopulate cleared panel');
+vm.runInContext(source.slice(source.indexOf('chrome.runtime.sendMessage({ type: "GET_TAB_STATE"'),source.indexOf('\nconst gridIconBtn')),ctx);
+snapshot({tabId:1,state:{requestId:42,currentProduct:{name:'old'},searchResults:[{name:'old'}]}});
+assert.equal(ctx.currentProduct.name,'new','Late initial snapshot cannot overwrite new product');
+console.log('Panel reset, stale message and stale initial snapshot tests passed');

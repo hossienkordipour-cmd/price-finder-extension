@@ -5,7 +5,9 @@ import {
   normalizeProductText,
 } from './filters.js';
 import { parsePrice } from './price-utils.js';
-import { getTabStateKey, TabSearchRegistry } from './tab-state.js';
+import { parseDigikalaVerifiedOffer, createDigikalaOfferVerifier, getDigikalaProductId } from './digikala-offer.js';
+import { needsMerchantPriceCheck, verifyDigipayMerchantOffer } from './merchant-price.js';
+import { getTabStateKey, TabSearchRegistry, getPageKey } from './tab-state.js';
 import {
   beginApiRequest,
   clearApiLogs,
@@ -90,8 +92,44 @@ function broadcastTabUpdate(type, tabId, payload = {}) {
   chrome.runtime.sendMessage({ type, tabId, ...payload }).catch(() => {});
 }
 
-function persistTabState(tabId, state) {
-  return chrome.storage.local.set({ [getTabStateKey(tabId)]: state });
+const tabStateWrites = new Map();
+const tabOperations = new Map();
+function runTabOperation(tabId, task) {
+  const operation = (tabOperations.get(tabId) || Promise.resolve()).catch(() => {}).then(task);
+  tabOperations.set(tabId, operation);
+  void operation.finally(() => { if (tabOperations.get(tabId) === operation) tabOperations.delete(tabId); }).catch(() => {});
+  return operation;
+}
+
+function invalidateTabPage(tabId, url, force = false) {
+  if (!Number.isInteger(tabId)) return Promise.resolve();
+  return runTabOperation(tabId, async () => {
+    const key = getTabStateKey(tabId);
+    const current = (await chrome.storage.local.get([key]))[key];
+    const pageKey = getPageKey(url);
+    if (!force && pageKey === (current?.pageKey || getPageKey(current?.currentProduct?.navigationUrl || current?.currentProduct?.sourceUrl))) return;
+    const requestId = tabSearches.begin(tabId, current?.requestId);
+    await persistTabState(tabId, { currentProduct: null, productKey: null, searchResults: null,
+      isLoading: false, error: null, pageKey, requestId, updatedAt: Date.now() });
+    broadcastTabUpdate('PAGE_CHANGED', tabId, { requestId, pageKey });
+  });
+}
+function persistTabState(tabId, state, preserveLatestProduct = false) {
+  const previous = tabStateWrites.get(tabId) || Promise.resolve();
+  const write = previous.catch(() => {}).then(async () => {
+    const key = getTabStateKey(tabId);
+    const stored = (await chrome.storage.local.get([key]))[key];
+    if (stored?.requestId > state.requestId) return;
+    const next = preserveLatestProduct && stored?.requestId === state.requestId && stored?.productKey === state.productKey
+      ? { ...state, currentProduct: stored.currentProduct }
+      : state;
+    await chrome.storage.local.set({ [key]: next });
+  });
+  tabStateWrites.set(tabId, write);
+  void write.finally(() => {
+    if (tabStateWrites.get(tabId) === write) tabStateWrites.delete(tabId);
+  }).catch(() => {});
+  return write;
 }
 
 function getProductKey(product) {
@@ -100,11 +138,13 @@ function getProductKey(product) {
 
 async function registerDetectedProduct(tabId, product) {
   if (!Number.isInteger(tabId) || !product?.name) return;
-
+  return runTabOperation(tabId, async () => {
   const stateKey = getTabStateKey(tabId);
   const data = await chrome.storage.local.get([stateKey]);
   const currentState = data[stateKey];
   const productKey = getProductKey(product);
+  const pageKey = getPageKey(product.navigationUrl || product.sourceUrl);
+  if (currentState?.pageKey && pageKey && currentState.pageKey !== pageKey) return;
 
   if (currentState?.productKey === productKey) {
     await persistTabState(tabId, { ...currentState, currentProduct: product });
@@ -115,10 +155,11 @@ async function registerDetectedProduct(tabId, product) {
     return;
   }
 
-  const requestId = tabSearches.begin(tabId);
+  const requestId = tabSearches.begin(tabId, currentState?.requestId);
   await persistTabState(tabId, {
     currentProduct: product,
     productKey,
+    pageKey,
     searchResults: null,
     isLoading: false,
     error: null,
@@ -126,12 +167,17 @@ async function registerDetectedProduct(tabId, product) {
     updatedAt: Date.now(),
   });
   broadcastTabUpdate("PRODUCT_UPDATED", tabId, { product, requestId });
+  });
 }
 
 function startTabSearch(tabId, product, options = {}) {
   if (!Number.isInteger(tabId) || !product?.name) return;
-
-  const requestId = tabSearches.begin(tabId);
+  return runTabOperation(tabId, async () => {
+  const current = (await chrome.storage.local.get([getTabStateKey(tabId)]))[getTabStateKey(tabId)];
+  const pageKey = getPageKey(product.navigationUrl || product.sourceUrl);
+  if (current?.pageKey && pageKey && current.pageKey !== pageKey) return;
+  if (current?.productKey && current.productKey !== getProductKey(product)) return;
+  const requestId = tabSearches.begin(tabId, current?.requestId);
 
   const loadingState = {
     currentProduct: product,
@@ -140,16 +186,17 @@ function startTabSearch(tabId, product, options = {}) {
     error: null,
     requestId,
     productKey: getProductKey(product),
+    pageKey,
     updatedAt: Date.now(),
   };
-  persistTabState(tabId, loadingState);
+  await persistTabState(tabId, loadingState);
   broadcastTabUpdate("SEARCH_STARTED", tabId, { product, requestId });
 
   searchPrices(product, {
     ...options,
     onProgress: (partialResults) => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
-      persistTabState(tabId, { ...loadingState, searchResults: partialResults });
+      persistTabState(tabId, { ...loadingState, searchResults: partialResults }, true);
       broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId, isPartial: true });
     }
   })
@@ -163,7 +210,8 @@ function startTabSearch(tabId, product, options = {}) {
         requestId,
         productKey: getProductKey(product),
         updatedAt: Date.now(),
-      }).then(() => broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId, isPartial: false }));
+        pageKey,
+      }, true).then(() => { if (tabSearches.isCurrent(tabId, requestId)) broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId, isPartial: false }); });
     })
     .catch(error => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
@@ -176,13 +224,27 @@ function startTabSearch(tabId, product, options = {}) {
         requestId,
         productKey: getProductKey(product),
         updatedAt: Date.now(),
-      }).then(() => broadcastTabUpdate("SEARCH_FAILED", tabId, { error: message, requestId }));
+        pageKey,
+      }, true).then(() => { if (tabSearches.isCurrent(tabId, requestId)) broadcastTabUpdate("SEARCH_FAILED", tabId, { error: message, requestId }); });
     });
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PAGE_CHANGED' || message.type === 'PRODUCT_CLEARED') {
+    if (sender.tab?.url && getPageKey(sender.tab.url) !== getPageKey(message.url)) {
+      sendResponse({ success: false });
+      return false;
+    }
+    invalidateTabPage(sender.tab?.id, message.url, message.type === 'PRODUCT_CLEARED').then(() => sendResponse({ success: true })).catch(() => sendResponse({ success: false }));
+    return true;
+  }
   if (message.type === "PRODUCT_DETECTED") {
     const tabId = sender.tab?.id;
+    if (message.product?.navigationUrl && sender.tab?.url && getPageKey(message.product.navigationUrl) !== getPageKey(sender.tab.url)) {
+      sendResponse({ success: false, tabId });
+      return false;
+    }
     registerDetectedProduct(tabId, message.product);
     sendResponse({ success: Number.isInteger(tabId), tabId });
     return false;
@@ -208,9 +270,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ tabId: null, state: null });
         return;
       }
-      chrome.storage.local.get([getTabStateKey(tabId)], data => {
-        sendResponse({ tabId, state: data[getTabStateKey(tabId)] || null });
-      });
+      Promise.resolve(tabOperations.get(tabId)).then(() => tabStateWrites.get(tabId)).then(() => chrome.storage.local.get([getTabStateKey(tabId)]))
+        .then(data => sendResponse({ tabId, state: data[getTabStateKey(tabId)] || null }));
     };
 
     if (Number.isInteger(sender.tab?.id)) {
@@ -371,14 +432,19 @@ async function searchDigipay(query) {
       results.push({
         store: storeFa || storeDomain.split('.')[0],
         name: name,
-        price: price, // Digipay returns Toman natively
+        price: price, // Feed claims toman; verify Amir Store at the destination.
         url: urlMatch,
         image: image,
         availability: true, // Digipay usually shows available items or sorts them
         condition: "new"
       });
     }
-    return results;
+    let merchantChecks = 0;
+    const verified = await Promise.all(results.map(offer => {
+      if (needsMerchantPriceCheck(offer.url) && ++merchantChecks > 4) return null;
+      return verifyDigipayMerchantOffer(offer, fetchWithTimeout);
+    }));
+    return verified.filter(Boolean);
   } catch (e) {
     return [];
   }
@@ -423,6 +489,7 @@ async function searchPricesFromStores(product, onProgress) {
   ];
 
   const allValidResults = [];
+  const verifyDigikalaOffer = createDigikalaOfferVerifier(fetchWithTimeout);
 
   const filterAndScore = (r) => {
     if (r.availability === false) return null;
@@ -434,6 +501,12 @@ async function searchPricesFromStores(product, onProgress) {
   };
 
       const sortAndDedupe = (results) => {
+    const affiliateByDkp = new Map();
+    for (const offer of results) {
+      if (!offer.originalAffiliateUrl && (offer.source !== 'affilio' || offer.isMerged || !['دیجی کالا', 'دیجی‌کالا'].includes(offer.store))) continue;
+      const dkp = getDigikalaProductId(offer);
+      if (dkp) affiliateByDkp.set(dkp, { ...offer, url: offer.originalAffiliateUrl || offer.url });
+    }
     // 1. Extract and cache Affilio Token Prefix
     results.forEach(item => {
       if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
@@ -450,7 +523,6 @@ async function searchPricesFromStores(product, onProgress) {
     });
 
     const uniqueByKey = new Map();
-    const seenDkps = new Set(); 
 
     results.forEach(item => {
       if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
@@ -458,21 +530,27 @@ async function searchPricesFromStores(product, onProgress) {
       
       const isTargetStore = item.store === "دیجی‌کالا" || item.store === "اسنپ‌شاپ";
 
+      if (item.store === 'دیجی‌کالا' && item.priceSource === 'digikala-product-api') {
+        const dkp = (item.sourceUrl || item.url || '').match(/dkp-(\d+)/i)?.[1];
+        const affiliate = affiliateByDkp.get(dkp);
+        if (affiliate) {
+          item.sourceUrl ||= item.url;
+          item.url = affiliate.url; // Preserve the supplied signed tracking link exactly.
+          item.isAffiliate = true;
+          item.source = 'affilio';
+          item.isMerged = true;
+        }
+      }
+
       if (isTargetStore) {
         // Only Digikala relies on direct results here. Preserve SnappShop's
         // original Affilio offers and their supplied tracking links.
-        if (item.store === "دیجی‌کالا" && item.source === "affilio" && !item.isMerged) return;
+        if (item.store === "دیجی‌کالا" && item.source === "affilio" && !item.isMerged && !item.priceVerified) return;
         
         // 2. Digikala specific deduplication
         if (item.store === "دیجی‌کالا") {
             if (item.url && (item.url.includes("torob.com") || item.url.includes("emalls.ir"))) return;
             
-            let dkp = null;
-            if (item.url && item.url.match(/dkp-(\d+)/i)) dkp = item.url.match(/dkp-(\d+)/i)[1];
-            if (dkp) {
-                if (seenDkps.has(dkp)) return; // DROP absolute duplicates
-                seenDkps.add(dkp);
-            }
         }
 
         // 3. UNIVERSAL AFFILIATE UPGRADE
@@ -484,9 +562,11 @@ async function searchPricesFromStores(product, onProgress) {
         }
       }
 
-      const key = item.store + "|" + normalizeProductText(item.name) + "|" + item.price;
+      const dkp = item.store === 'دیجی‌کالا' ? getDigikalaProductId(item) : null;
+      const key = dkp ? 'digikala|' + dkp : item.store + "|" + normalizeProductText(item.name) + "|" + item.price;
       const existing = uniqueByKey.get(key);
-      if (!existing || (item.isAffiliate && !existing.isAffiliate)) {
+      const rank = offer => Number(offer.priceVerified === true) * 4 + Number(Boolean(offer.originalAffiliateUrl)) * 2 + Number(Boolean(offer.isAffiliate));
+      if (!existing || rank(item) > rank(existing)) {
         uniqueByKey.set(key, item);
       }
     });
@@ -497,9 +577,10 @@ async function searchPricesFromStores(product, onProgress) {
   };
 
   const wrappedPromises = promises.map(req => 
-    req.p.then(res => {
+    req.p.then(async res => {
       logApiResults(req.name, res.length);
-      const valid = res.map(filterAndScore).filter(Boolean);
+      const checked = await Promise.all(res.map(offer => verifyDigikalaOffer(offer, req.name)));
+      const valid = checked.map(filterAndScore).filter(Boolean);
       allValidResults.push(...valid);
       if (onProgress) onProgress(sortAndDedupe(allValidResults));
       return valid;
@@ -591,25 +672,35 @@ async function searchDigikala(productName) {
   const data = await response.json();
   const products = data?.data?.products || [];
 
-  return products.slice(0, 8).map(item => {
+  const verified = await Promise.all(products.slice(0, 8).map(async item => {
+    if (!Number.isSafeInteger(Number(item.id)) || Number(item.id) <= 0) return null;
     const v = item.default_variant;
     // دیجی‌کالا ریال میده ÷ ۱۰ = تومان
     const price = parsePrice(v?.price?.selling_price, "IRR");
     const originalPrice = parsePrice(v?.price?.rrp_price || v?.price?.selling_price, "IRR");
     const image = item.images?.main?.url?.[0] || item.images?.list?.[0]?.url?.[0] || "";
 
-    return {
+    const candidate = {
       store: "دیجی‌کالا", storeColor: "#E42112",
       name: item.title_fa || item.title_en || productName,
       price, originalPrice,
       discount: v?.price?.discount_percent || 0,
-      url: `https://www.digikala.com${item.url?.uri || ""}`,
+      url: `https://www.digikala.com/product/dkp-${item.id}/`,
       image,
       rating: item.rating?.rate || 0,
       reviewCount: item.rating?.count || 0,
       availability: v?.status === "marketable",
     };
-  }).filter(p => p.price > 0);
+    try {
+      const detail = await fetchWithTimeout(`https://api.digikala.com/v2/product/${item.id}/`, {
+        timeout: 5000, logStore: 'دیجی‌کالا', logOperation: 'verify-offer',
+        credentials: 'omit', headers: { Accept: 'application/json' },
+      });
+      if (!detail.ok) return null;
+      return parseDigikalaVerifiedOffer(await detail.json(), candidate, item.id);
+    } catch { return null; }
+  }));
+  return verified.filter(Boolean);
 }
 
 // ==============================
@@ -773,6 +864,7 @@ async function searchDivar(productName) {
     const url = `${PIQO_API_BASE_URL}/v1/divar/search?q=${encodeURIComponent(productName)}`;
     const response = await fetchWithTimeout(url, {
       logStore: "دیوار",
+      timeout: 10000, // Backend pagination has an eight-second total budget.
       headers: {
         "Accept": "application/json",
       },
@@ -1068,6 +1160,9 @@ async function searchRojashop(productName) {
 
 // Dynamically set popup for restricted pages where content scripts can't run
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading' || changeInfo.url) {
+    void invalidateTabPage(tabId, changeInfo.url || tab.url, changeInfo.status === 'loading').catch(() => {});
+  }
   if (tab.url) {
     const isRestricted = tab.url.startsWith('chrome://') || 
                          tab.url.startsWith('edge://') || 
