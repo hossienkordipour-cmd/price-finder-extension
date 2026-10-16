@@ -23,7 +23,11 @@
     "http://www.amiirstore.com/*",
     "https://www.amiirstore.com/*",
     "https://*.masterkala.com/*",
-    "https://kalaoma.com/*"
+    "https://kalaoma.com/*",
+    "https://*.technolife.com/*",
+    "https://*.technolife.ir/*",
+    "https://*.khanoumi.com/*",
+    "https://deemanetwork.com/*"
   ],
   "background": {
     "service_worker": "background.js",
