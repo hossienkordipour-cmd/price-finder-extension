@@ -7,7 +7,7 @@ assert.equal(getDigikalaProductId({ url: 'https://evil.example/product/dkp-21372
 assert.equal(getDigikalaProductId({ url: 'https://www.digikala.com.evil.example/product/dkp-21372366/' }), null);
 let calls = 0;
 const verify = createDigikalaOfferVerifier(async (url, options) => {
-  calls++; assert.ok(url.endsWith('/21372366/')); assert.equal(options.credentials, 'omit');
+  calls++; assert.ok(url.endsWith('/21372366/')); assert.equal(options.credentials, 'include', 'DigiCDN connection cookie must survive redirects');
   return { ok: true, json: async () => ({ data: { product: { id: 21372366, status: 'marketable', title_fa: 'HX-KEG460', default_variant: {
     id: 81467417, status: 'marketable', price: { selling_price: 196680000 },
   } } } }) };

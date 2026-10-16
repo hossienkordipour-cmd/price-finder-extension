@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import puppeteer from 'puppeteer-core';
 
 const content = process.argv.includes('--baseline') ? execFileSync('git',['show','HEAD:content/content.js'],{encoding:'utf8'}) : await readFile(new URL('../content/content.js',import.meta.url),'utf8');
-const browser = await puppeteer.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
+const browser = await puppeteer.launch({executablePath:process.env.CHROME_PATH || (process.platform === 'darwin' ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'),headless:true});
 const fixture = `<!doctype html><meta charset="utf-8"><h1 data-testid="pdp-title">هدفون Anker R50i A3949</h1>
 <section><span data-testid="price-final">۴۰۵,۹۰۰</span><dds-icon name="value-toman"></dds-icon><p>بیمه</p></section>
 <article id="selected-offer"><span class="line-through" data-testid="price-no-discount">۴,۵۴۵,۲۰۰</span>
@@ -41,6 +41,39 @@ try {
   await page.evaluate(()=>{document.querySelector('[data-cro-id="pdp-add-to-cart"]').disabled=true;});
   await page.waitForFunction(()=>window.detected.at(-1).product.price===null,{timeout:3000});
   console.log('PASS: unavailable offer cannot use another seller price');
+
+  await page.evaluate(()=>{
+    const offer=document.querySelector('#selected-offer');
+    offer.innerHTML=`<div><dds-price-group>
+      <dds-price slot="original-price" unit="toman" variant="original">۹,۰۰۰,۰۰۰</dds-price>
+      <dds-price slot="price" unit="toman" variant="price">۸,۱۰۰,۰۰۰</dds-price>
+    </dds-price-group><div><button data-testid="add-to-cart" data-cro-id="pdp-add-to-cart" data-add-to-cart-variant-id="dds-selected">خرید</button></div></div>
+    <section>ارسال <dds-price slot="price" unit="toman" variant="price">۲۷۰,۰۰۰</dds-price></section>`;
+  });
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===8_100_000,{timeout:3000});
+  assert.equal(await page.evaluate(()=>window.detected.at(-1).product.variantId),'dds-selected');
+  console.log('PASS: DDS selected price excludes shipping, original and unrelated prices');
+  await page.evaluate(()=>{
+    const price=document.querySelector('#selected-offer dds-price[slot="price"]');
+    price.setAttribute('unit','rial'); price.textContent='۸۰,۰۰۰,۰۰۰';
+  });
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===8_000_000,{timeout:3000});
+  await page.evaluate(()=>{document.querySelector('#selected-offer [data-cro-id="pdp-add-to-cart"]').disabled=true;});
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===null,{timeout:3000});
+  console.log('PASS: DDS rial conversion and unavailable selected offer');
+
+  await page.evaluate(()=>{
+    const button=document.querySelector('#selected-offer [data-cro-id="pdp-add-to-cart"]');
+    button.disabled=false;
+    button.setAttribute('data-add-to-cart-variant-id','new-color');
+    const price=document.querySelector('#selected-offer dds-price[slot="price"]');
+    price.setAttribute('unit','toman'); price.textContent='۲,۷۵۰,۰۰۰';
+  });
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===2_750_000 && window.detected.at(-1).product.variantId==='new-color',{timeout:3000});
+  console.log('PASS: DDS variant change refreshes price and variant on same URL');
+  await page.evaluate(()=>document.querySelector('#selected-offer dds-price[slot="price"]').remove());
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===null,{timeout:3000});
+  console.log('PASS: missing DDS selling price cannot become shipping price');
 
   const panel=await browser.newPage();
   const panelHtml=await readFile(new URL('../sidebar/sidebar.html',import.meta.url),'utf8');

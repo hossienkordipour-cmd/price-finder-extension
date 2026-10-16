@@ -14,7 +14,7 @@ export function getDigikalaProductId(offer) {
   return null;
 }
 
-export function createDigikalaOfferVerifier(fetchPage) {
+export function createDigikalaOfferVerifier(fetchPage, { refresh = false } = {}) {
   const requests = new Map();
   let active = 0;
   const waiting = [];
@@ -27,14 +27,15 @@ export function createDigikalaOfferVerifier(fetchPage) {
   return async (offer, inputSource) => {
     const id = getDigikalaProductId(offer);
     if (!id) return offer;
-    if (offer.priceVerified && offer.priceSource === 'digikala-product-api' && offer.variantId) {
+    if (!refresh && offer.priceVerified && offer.priceSource === 'digikala-product-api' && offer.variantId) {
       if (!requests.has(id)) requests.set(id, Promise.resolve(offer));
       return offer;
     }
     if (!requests.has(id)) requests.set(id, schedule(async () => {
       try {
+        // DigiCDN requires its connection cookie to complete the redirect.
         const response = await fetchPage(`https://api.digikala.com/v2/product/${id}/`, {
-          timeout: 5000, logStore: 'دیجی‌کالا', logOperation: 'verify-offer', credentials: 'omit',
+          timeout: 5000, logStore: 'دیجی‌کالا', logOperation: 'verify-offer', credentials: 'include',
           headers: { Accept: 'application/json' },
         });
         if (!response.ok) return null;

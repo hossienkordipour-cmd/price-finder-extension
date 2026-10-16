@@ -1,4 +1,4 @@
-export const SEARCH_CACHE_STORAGE_KEY = "searchResultCacheV11";
+export const SEARCH_CACHE_STORAGE_KEY = "searchResultCacheV15";
 export const DEFAULT_SEARCH_CACHE_TTL_MS = 10 * 60 * 1000;
 export const DEFAULT_SEARCH_CACHE_MAX_ENTRIES = 30;
 

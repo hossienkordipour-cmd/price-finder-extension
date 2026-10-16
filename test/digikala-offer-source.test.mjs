@@ -10,7 +10,8 @@ const end = source.indexOf('\n// ==============================', start + 10);
 let reachable = true;
 const context = { parsePrice,
   parseDigikalaVerifiedOffer,
-  fetchWithTimeout: async url => {
+  fetchWithTimeout: async (url, options) => {
+    assert.equal(options.credentials, 'include', 'Search and detail lookup must both accept the DigiCDN connection cookie');
     if (url.includes('/v2/product/')) {
       if (!reachable) throw new Error('timeout');
       return { ok: true, json: async () => ({ data: { product: { id: 15948785, status: 'marketable', default_variant: {

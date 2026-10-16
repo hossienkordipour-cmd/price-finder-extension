@@ -326,9 +326,14 @@ async function searchPrices(product, options = {}) {
   if (!options.force) {
     const cached = await searchCache.get(cacheKey);
     if (cached) {
-      logApiCache("cache-hit", cacheKey, cached.results.length);
-      if (options.onProgress) options.onProgress(cached.results);
-      return cached.results;
+      // Product default offers can change within our general search-cache TTL.
+      // Refresh Digikala prices before displaying cached cards, keeping their
+      // supplied affiliate links and the existing fallback on lookup failure.
+      const refreshDigikala = createDigikalaOfferVerifier(fetchWithTimeout, { refresh: true });
+      const results = await Promise.all(cached.results.map(offer => refreshDigikala(offer)));
+      logApiCache("cache-hit", cacheKey, results.length);
+      if (options.onProgress) options.onProgress(results);
+      return results;
     }
   }
 
@@ -709,7 +714,7 @@ async function searchTechnolife(productName) {
     const searchQ = queries.find(q => Array.isArray(q?.queryKey) && q.queryKey[0] === "search");
     const results = searchQ?.state?.data?.pages?.[0]?.results || [];
 
-    const mapped = results.slice(0, 8).map(item => {
+    const mapped = results.slice(0, 20).map(item => {
       const priceRial = item.discounted_price || item.normal_price || 0;
       const price = parsePrice(priceRial, "IRR");
       const originalPrice = parsePrice(item.normal_price || priceRial, "IRR");
@@ -751,6 +756,7 @@ async function searchDigikala(productName) {
   const query = encodeURIComponent(productName);
   const response = await fetchWithTimeout(`https://api.digikala.com/v1/search/?q=${query}&page=1`, {
     logStore: "دیجی‌کالا",
+    credentials: "include",
     headers: { "Accept": "application/json" }
   });
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -780,7 +786,7 @@ async function searchDigikala(productName) {
     try {
       const detail = await fetchWithTimeout(`https://api.digikala.com/v2/product/${item.id}/`, {
         timeout: 5000, logStore: 'دیجی‌کالا', logOperation: 'verify-offer',
-        credentials: 'omit', headers: { Accept: 'application/json' },
+        credentials: 'include', headers: { Accept: 'application/json' },
       });
       if (!detail.ok) return null;
       return parseDigikalaVerifiedOffer(await detail.json(), candidate, item.id);

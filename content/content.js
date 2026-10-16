@@ -311,14 +311,19 @@ if (product && product.name) {
       for (let scope = button.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
         // Stop before reaching a list of unrelated sellers or recommended products.
         if (scope.querySelectorAll('button[data-testid="add-to-cart"]').length > 1) break;
-        const candidates = [...scope.querySelectorAll('[data-testid="price-final"]')].filter(isVisible);
-        if (!candidates.length) continue;
+        const candidates = [...scope.querySelectorAll('[data-testid="price-final"], dds-price[slot="price"][variant="price"]')].filter(isVisible);
+        if (!candidates.length) {
+          // The selected offer's price group can briefly be empty while its
+          // variant changes. Do not climb into the shipping section in that case.
+          if (scope.querySelector('dds-price-group')) return {price: null, variantId};
+          continue;
+        }
         const prices = candidates.map(element => {
           if (element.closest('del, s, .line-through') || window.getComputedStyle(element).textDecoration.includes('line-through')) return null;
           const container = element.parentElement;
           const iconUnit = container?.querySelector('dds-icon[name="value-toman"]') ? 'تومان' : '';
-          const unit = iconUnit || container?.textContent || '';
-          if (!/(?:تومان|ریال|\birr\b|\birt\b)/i.test(unit)) return null;
+          const unit = element.getAttribute('unit') || iconUnit || container?.textContent || '';
+          if (!/(?:تومان|ریال|\birr\b|\birt\b|\brial\b|\btoman\b)/i.test(unit)) return null;
           return parsePriceInTomans(element.textContent, unit);
         }).filter(value => value > 0);
         const uniquePrices = [...new Set(prices)];
@@ -760,7 +765,18 @@ function togglePiqoPopup(isLeft) {
       transition: opacity 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
       color-scheme: light;
     `;
+    // An empty srcdoc added by page/extension code overrides the extension URL
+    // and renders a blank panel. This frame must always load our packaged UI.
+    const panelFrame = popup;
+    const restorePanelSource = () => {
+      if (panelFrame.hasAttribute('srcdoc')) panelFrame.removeAttribute('srcdoc');
+    };
+    new MutationObserver(restorePanelSource).observe(panelFrame, {
+      attributes: true,
+      attributeFilter: ['srcdoc'],
+    });
     document.body.appendChild(popup);
+    restorePanelSource();
   }
 
   const slideStart = isLeft ? 'translateX(-40px)' : 'translateX(40px)';
