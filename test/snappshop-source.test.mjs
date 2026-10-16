@@ -27,7 +27,8 @@ const context = {
   searchSnappShopDirect: async () => { directCalls++; return []; },
 };
 for (const fn of ['searchDigikala', 'searchTorob', 'searchEmalls', 'searchBasalam',
-  'searchDivar', 'searchSheypoor', 'searchMasterKala', 'searchDigipay', 'searchKalaoma']) {
+  'searchDivar', 'searchSheypoor', 'searchMasterKala', 'searchDigipay', 'searchKalaoma',
+  'searchTechnolife', 'searchKhanoumi']) {
   context[fn] = async () => [];
 }
 vm.createContext(context);

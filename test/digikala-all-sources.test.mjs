@@ -13,7 +13,7 @@ const context = { console: { log() {} }, globalAffilioPrefix: null, assessProduc
   searchDigipay: async () => [{ name, store: 'دیجی‌کالا', price: 17790000, url, availability: true }, { name, store: 'اسنپ‌شاپ', price: 19490000, url: 'https://snappshop.ir/product/snp-982944724', availability: true }],
   fetchWithTimeout: async () => ({ ok: true, json: async () => ({ data: { product: { id: 21372366, title_fa: name, status: 'marketable', default_variant: { id: 81467417, status: 'marketable', price: { selling_price: 196680000 } } } } }) }),
 };
-for (const fn of ['searchDigikala','searchTorob','searchEmalls','searchBasalam','searchDivar','searchSheypoor','searchMasterKala','searchKalaoma']) context[fn] = async () => [];
+for (const fn of ['searchDigikala','searchTorob','searchEmalls','searchBasalam','searchDivar','searchSheypoor','searchMasterKala','searchKalaoma','searchTechnolife','searchKhanoumi']) context[fn] = async () => [];
 vm.createContext(context);
 vm.runInContext(source.slice(source.indexOf('async function searchPricesFromStores('), source.indexOf('\nasync function searchPiqoApi(')), context);
 const progress = [];

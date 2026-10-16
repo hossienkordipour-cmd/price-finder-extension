@@ -477,6 +477,8 @@ async function searchPricesFromStores(product, onProgress) {
   const promises = [
     { name: "افیلیو", p: affilioPromise },
     // SnappShop direct search is paused; keep its results from the Affilio API.
+    { name: "تکنولایف", p: searchTechnolife(searchName) },
+    { name: "خانومی", p: searchKhanoumi(searchName) },
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
@@ -640,22 +642,99 @@ function searchStorePage(store, url, timeoutMs = 18000) {
   });
 }
 
+const DEEMA_UNIVERSAL_LINK = "https://deemanetwork.com/click/d/6e262f3e_1645_4f22_a310_e67585054a62";
+
+function createDeemaLink(originalUrl) {
+  if (!originalUrl) return originalUrl;
+  try {
+    const b64 = btoa(unescape(encodeURIComponent(originalUrl)));
+    return `${DEEMA_UNIVERSAL_LINK}/${b64}`;
+  } catch (e) {
+    return originalUrl;
+  }
+}
+
 async function searchKhanoumi(productName) {
-  const query = encodeURIComponent(productName);
-  const url = `https://www.khanoumi.com/search?query=${query}`;
-  const context = beginApiRequest({ store: "خانومی", url, method: "GET", operation: "page-search" });
-  const items = await searchStorePage("خانومی", url);
-  completeApiRequest(context, { ok: true, status: 200 }, { resultCount: items.length });
-  return items;
+  try {
+    const query = encodeURIComponent(productName);
+    const url = `https://www.khanoumi.com/search?query=${query}`;
+    const context = beginApiRequest({ store: "خانومی", url, method: "GET", operation: "page-search" });
+    const items = await searchStorePage("خانومی", url);
+    completeApiRequest(context, { ok: true, status: 200 }, { resultCount: items.length });
+    
+    return items.map(item => ({
+      ...item,
+      url: createDeemaLink(item.url),
+      rawUrl: item.url,
+      isAffiliate: true,
+      source: "deema"
+    }));
+  } catch (e) {
+    console.warn("[خانومی] خطا:", e.message);
+    return [];
+  }
 }
 
 async function searchTechnolife(productName) {
-  const query = encodeURIComponent(productName);
-  const url = `https://www.technolife.ir/product/list/search?keywords=${query}`;
-  const context = beginApiRequest({ store: "تکنولایف", url, method: "GET", operation: "page-search" });
-  const items = await searchStorePage("تکنولایف", url);
-  completeApiRequest(context, { ok: true, status: 200 }, { resultCount: items.length });
-  return items;
+  try {
+    const query = encodeURIComponent(productName);
+    const url = `https://www.technolife.com/product/list/search?keywords=${query}`;
+    const context = beginApiRequest({ store: "تکنولایف", url, method: "GET", operation: "next-data" });
+    const response = await fetchWithTimeout(url, {
+      logStore: "تکنولایف",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      }
+    });
+    if (!response.ok) {
+      completeApiRequest(context, { ok: false, status: response.status }, { error: `HTTP ${response.status}` });
+      return [];
+    }
+    const html = await response.text();
+    const m = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/);
+    if (!m) {
+      completeApiRequest(context, { ok: false, status: 200 }, { error: "No NEXT_DATA found" });
+      return [];
+    }
+    const data = JSON.parse(m[1]);
+    const queries = data?.props?.pageProps?.dehydratedState?.queries || [];
+    const searchQ = queries.find(q => Array.isArray(q?.queryKey) && q.queryKey[0] === "search");
+    const results = searchQ?.state?.data?.pages?.[0]?.results || [];
+
+    const mapped = results.slice(0, 8).map(item => {
+      const priceRial = item.discounted_price || item.normal_price || 0;
+      const price = parsePrice(priceRial, "IRR");
+      const originalPrice = parsePrice(item.normal_price || priceRial, "IRR");
+      const codeNum = String(item.code || "").replace(/^TLP-/i, "");
+      const slug = (item.name || "").replace(/\s+/g, "-");
+      const prodUrl = codeNum ? `https://www.technolife.com/product-${codeNum}/${slug}` : url;
+      const imgUrl = item.image ? (item.image.startsWith("http") ? item.image : `https://www.technolife.com${item.image}`) : "";
+
+      return {
+        store: "تکنولایف",
+        storeColor: "#0D5CAB",
+        name: item.name || productName,
+        price,
+        originalPrice,
+        discount: item.discount ? parseInt(item.discount, 10) || 0 : 0,
+        url: createDeemaLink(prodUrl),
+        rawUrl: prodUrl,
+        image: imgUrl,
+        rating: item.score_avg ? Math.round(item.score_avg * 10) / 10 : 0,
+        reviewCount: item.score_count || 0,
+        availability: Boolean(item.available),
+        isAffiliate: true,
+        source: "deema"
+      };
+    }).filter(p => p && p.price > 0);
+
+    completeApiRequest(context, { ok: true, status: 200 }, { resultCount: mapped.length });
+    return mapped;
+  } catch (e) {
+    console.warn("[تکنولایف] خطا:", e.message);
+    return [];
+  }
 }
 
 // ==============================

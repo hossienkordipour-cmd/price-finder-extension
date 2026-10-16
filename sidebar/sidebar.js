@@ -19,7 +19,7 @@ const conditionFilter = document.getElementById("condition-filter");
 function getAffiliateUrl(store, originalUrl) {
   if (!originalUrl) return "#";
   
-  if (store === "باسلام" || store === "basalam") {
+    if (store === "باسلام" || store === "basalam") {
     // کد افیلیت باسلام
     try {
       // استفاده از btoa برای انکد کردن آدرس مقصد به Base64
@@ -27,6 +27,18 @@ function getAffiliateUrl(store, originalUrl) {
       return `https://a.bslm.ir/api/v1/tracking/click/g/466ef6e231e4f71cf496b350123065d3?b64=${b64}`;
     } catch (e) {
       console.error("Base64 encoding failed for URL:", originalUrl);
+      return originalUrl;
+    }
+  }
+
+  // دیما: تکنولایف و خانومی
+  if (store === "تکنولایف" || store === "خانومی" || store === "technolife" || store === "khanoumi") {
+    if (originalUrl.includes("deemanetwork.com")) return originalUrl;
+    try {
+      const b64 = btoa(unescape(encodeURIComponent(originalUrl)));
+      return `https://deemanetwork.com/click/d/6e262f3e_1645_4f22_a310_e67585054a62/${b64}`;
+    } catch (e) {
+      console.error("Deema Base64 encoding failed for URL:", originalUrl);
       return originalUrl;
     }
   }
@@ -179,6 +191,14 @@ function generateCardHtml(item, isBase = false) {
   }
 
   const storeText = item.condition === "used" ? `${item.store} - کارکرده` : item.store;
+  let affiliateBadge = '';
+  if (!isBase) {
+    if (item.source === "deema" || item.store === "تکنولایف" || item.store === "خانومی") {
+      affiliateBadge = '<span class="affiliate-badge deema" aria-label="نتیجه افیلیت از دیما">دیما</span>';
+    } else if (item.source === "affilio" || item.isAffiliate) {
+      affiliateBadge = '<span class="affiliate-badge" aria-label="نتیجه افیلیت از افیلیو">افیلیو</span>';
+    }
+  }
 
   const tag = isBase ? 'div' : 'a';
   const finalUrl = getAffiliateUrl(item.store || item.source, item.url);
@@ -193,6 +213,7 @@ function generateCardHtml(item, isBase = false) {
         <h3 class="card-title">${item.name || currentProduct?.name || 'کالا'}</h3>
         <div class="card-store-row">
           <div class="card-store">${isBase ? item.store : storeText}</div>
+          ${affiliateBadge}
         </div>
         ${item.price && item.price > 0 ? `
         <div class="card-bottom">

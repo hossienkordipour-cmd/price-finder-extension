@@ -1136,3 +1136,61 @@ chrome.runtime.onMessage.addListener((message) => {
     togglePiqoPopup(isLeft);
   }
 });
+
+// Page bridge for stores that render search results in the browser.
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type !== "STORE_PAGE_SEARCH") return;
+
+  const toEng = (val) => String(val || "").replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
+  const parseToman = (val) => {
+    const n = Number(toEng(val).replace(/[^0-9]/g, ""));
+    return Number.isFinite(n) ? n : 0;
+  };
+  const absolute = (val) => {
+    if (!val) return "";
+    try { return new URL(val, location.origin).href; } catch { return ""; }
+  };
+  const waitFor = (selector, timeout = 10000) => new Promise(resolve => {
+    const started = Date.now();
+    const check = () => {
+      const nodes = document.querySelectorAll(selector);
+      if (nodes.length || Date.now() - started >= timeout) return resolve(nodes);
+      setTimeout(check, 250);
+    };
+    check();
+  });
+  const collect = async () => {
+    if (message.store === "خانومی") {
+      const anchors = await waitFor('a[href*="/products/"], a[href*="/product/"]');
+      const seen = new Set();
+      return [...anchors].map(anchor => {
+        const url = absolute(anchor.getAttribute("href"));
+        if (!url || seen.has(url)) return null;
+        seen.add(url);
+        const name = anchor.querySelector("h3, h2, .product-title")?.innerText?.trim() || anchor.getAttribute("title");
+        if (!name) return null;
+        const pricing = anchor.querySelector('[data-sentry-component="Pricing"], .price, [class*="price"]');
+        const current = pricing?.querySelector(".text-text-black")?.innerText || pricing?.innerText || "";
+        const price = parseToman(current);
+        if (!price) return null;
+        return {
+          store: "خانومی",
+          storeColor: "#E91E63",
+          name,
+          price,
+          originalPrice: price,
+          discount: 0,
+          url,
+          image: absolute(anchor.querySelector("img")?.src),
+          rating: 0,
+          reviewCount: 0,
+          availability: true
+        };
+      }).filter(Boolean).slice(0, 6);
+    }
+    return [];
+  };
+
+  collect().then(items => sendResponse({ items })).catch(() => sendResponse({ items: [] }));
+  return true;
+});
