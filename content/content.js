@@ -245,8 +245,10 @@ let detectionInterval = null;
       product = null;
     } else if (hostname.includes("digikala.com")) {
       product = extractDigikala();
-    } else if (/^(www\.)?technolife\.com$/.test(hostname)) {
+    } else if (/^(www\.)?technolife\.(com|ir)$/.test(hostname)) {
       product = extractTechnolife();
+    } else if (hostname.includes("khanoumi.com")) {
+      product = extractKhanoumi();
     } else if (/^(www\.)?etkala\.ir$/.test(hostname)) {
       product = extractEtkala();
     } else if (hostname.includes("torob.com")) {
@@ -549,6 +551,25 @@ if (product && product.name) {
     // as an unknown-price fallback or multiply guessed prices by ten.
     return { name, price, image: getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content),
       source: 'technolife', store: 'تکنولایف', sourceUrl: location.href };
+  }
+
+  function extractKhanoumi() {
+    if (!/^\/products\//.test(location.pathname)) return null;
+    const name = cleanProductName(document.querySelector('h1')?.textContent?.trim() || document.querySelector('meta[property="og:title"]')?.content);
+    if (!name) return null;
+    let price = null;
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const s of scripts) {
+      try {
+        const d = JSON.parse(s.textContent);
+        if (d['@type'] === 'Product' && d.offers?.price) {
+          price = parsePriceInTomans(d.offers.price, d.offers.priceCurrency || 'IRR');
+          break;
+        }
+      } catch {}
+    }
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+    return { name, price, image, source: 'khanoumi', store: 'خانومی', sourceUrl: location.href };
   }
 
   function extractEtkala() {

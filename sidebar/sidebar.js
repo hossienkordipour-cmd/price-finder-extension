@@ -261,6 +261,7 @@ function generateSkeletonHtml() {
 }
 
 function renderResults(results, isLoading = false) {
+  allResults = results || [];
   if (currentProduct) {
     currentProductEl.innerHTML = generateCardHtml(currentProduct, true);
     currentProductEl.classList.remove("hidden");

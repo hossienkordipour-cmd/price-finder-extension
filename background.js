@@ -479,10 +479,36 @@ async function searchPricesFromStores(product, onProgress) {
     return [...unique.values()];
   });
 
+  const tlPromise = Promise.allSettled([
+    searchTechnolife(searchName),
+    searchTechnolife(product.name)
+  ]).then(results => {
+    const combined = [];
+    results.forEach(res => {
+      if (res.status === 'fulfilled' && res.value) combined.push(...res.value);
+    });
+    const unique = new Map();
+    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    return [...unique.values()];
+  });
+
+  const khPromise = Promise.allSettled([
+    searchKhanoumi(searchName),
+    searchKhanoumi(product.name)
+  ]).then(results => {
+    const combined = [];
+    results.forEach(res => {
+      if (res.status === 'fulfilled' && res.value) combined.push(...res.value);
+    });
+    const unique = new Map();
+    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    return [...unique.values()];
+  });
+
   const promises = [
     { name: "افیلیو", p: affilioPromise },
-    { name: "تکنولایف", p: searchTechnolife(searchName).then(res => res && res.length ? res : searchTechnolife(product.name)) },
-    { name: "خانومی", p: searchKhanoumi(searchName).then(res => res && res.length ? res : searchKhanoumi(product.name)) },
+    { name: "تکنولایف", p: tlPromise },
+    { name: "خانومی", p: khPromise },
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
@@ -670,7 +696,7 @@ async function searchKhanoumi(productName) {
         image: imgUrl,
         rating: 0,
         reviewCount: 0,
-        availability: Boolean(item.hasStock && item.isSalable),
+        availability: item.hasStock !== false && item.isSalable !== false,
         isAffiliate: true,
         source: "deema"
       };
@@ -735,7 +761,7 @@ async function searchTechnolife(productName) {
         image: imgUrl,
         rating: item.score_avg ? Math.round(item.score_avg * 10) / 10 : 0,
         reviewCount: item.score_count || 0,
-        availability: Boolean(item.available),
+        availability: typeof item.available === "number" ? item.available > 0 : Boolean(item.available),
         isAffiliate: true,
         source: "deema"
       };
