@@ -505,10 +505,24 @@ async function searchPricesFromStores(product, onProgress) {
     return [...unique.values()];
   });
 
+  const gsPromise = Promise.allSettled([
+    searchGooshishop(searchName),
+    searchGooshishop(product.name)
+  ]).then(results => {
+    const combined = [];
+    results.forEach(res => {
+      if (res.status === 'fulfilled' && res.value) combined.push(...res.value);
+    });
+    const unique = new Map();
+    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    return [...unique.values()];
+  });
+
   const promises = [
     { name: "افیلیو", p: affilioPromise },
     { name: "تکنولایف", p: tlPromise },
     { name: "خانومی", p: khPromise },
+    { name: "گوشی شاپ", p: gsPromise },
     { name: "دیجی‌کالا", p: searchDigikala(searchName) },
     { name: "ترب", p: searchTorob(searchName) },
     { name: "ایمالز", p: searchEmalls(searchName) },
@@ -646,8 +660,9 @@ const DEEMA_UNIVERSAL_LINK = "https://deemanetwork.com/click/d/6e262f3e_1645_4f2
 function createDeemaLink(originalUrl) {
   if (!originalUrl) return originalUrl;
   try {
-    const b64 = btoa(unescape(encodeURIComponent(originalUrl)));
-    return `${DEEMA_UNIVERSAL_LINK}/${b64}`;
+    // Canonicalize Persian paths before Base64 and keep the payload in one path segment.
+    const b64 = btoa(unescape(encodeURIComponent(new URL(originalUrl).href)));
+    return `${DEEMA_UNIVERSAL_LINK}/${encodeURIComponent(b64)}`;
   } catch (e) {
     return originalUrl;
   }
@@ -741,9 +756,10 @@ async function searchTechnolife(productName) {
     const results = searchQ?.state?.data?.pages?.[0]?.results || [];
 
     const mapped = results.slice(0, 20).map(item => {
-      const priceRial = item.discounted_price || item.normal_price || 0;
-      const price = parsePrice(priceRial, "IRR");
-      const originalPrice = parsePrice(item.normal_price || priceRial, "IRR");
+      // Technolife search data already uses toman (the same unit as its page).
+      const priceToman = item.discounted_price || item.normal_price || 0;
+      const price = parsePrice(priceToman, "TOMAN");
+      const originalPrice = parsePrice(item.normal_price || priceToman, "TOMAN");
       const codeNum = String(item.code || "").replace(/^TLP-/i, "");
       const slug = (item.name || "").replace(/\s+/g, "-");
       const prodUrl = codeNum ? `https://www.technolife.com/product-${codeNum}/${slug}` : url;
@@ -771,6 +787,81 @@ async function searchTechnolife(productName) {
     return mapped;
   } catch (e) {
     console.warn("[تکنولایف] خطا:", e.message);
+    return [];
+  }
+}
+
+// ==============================
+// گوشی شاپ (Gooshi Shop) — API مستقیم
+// ==============================
+async function searchGooshishop(productName) {
+  try {
+    const query = encodeURIComponent(productName);
+    const searchPath = encodeURIComponent(`/search?q=${productName}`);
+    const url = `https://gooshishop.com/api-frontend/search/search?url=${searchPath}`;
+    const context = beginApiRequest({ store: "گوشی شاپ", url, method: "GET", operation: "api-search" });
+    const response = await fetchWithTimeout(url, {
+      timeout: 10000,
+      logStore: "گوشی شاپ",
+      headers: {
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+      }
+    });
+    if (!response.ok) {
+      completeApiRequest(context, { ok: false, status: response.status }, { error: `HTTP ${response.status}` });
+      return [];
+    }
+    const json = await response.json();
+    const products = json?.result?.Products || [];
+    if (!Array.isArray(products)) {
+      completeApiRequest(context, { ok: true, status: 200 }, { resultCount: 0 });
+      return [];
+    }
+
+    const mapped = products.slice(0, 20).map(item => {
+      // Gooshishop ProductPrice.PriceValue is already in Tomans
+      const price = parsePrice(item.ProductPrice?.PriceValue || 0, "TOMAN");
+      if (price <= 0) return null;
+      const originalPrice = parsePrice(item.ProductPrice?.OldPriceValue || item.ProductPrice?.PriceValue || price, "TOMAN");
+      const relativeUrl = item.SeName ? String(item.SeName).replace(/^\/+/, '') : '';
+      const prodUrl = relativeUrl ? `https://gooshishop.com/${relativeUrl}` : `https://gooshishop.com/search?q=${query}`;
+
+      let imgUrl = item.DefaultPictureModel?.FullSizeImageUrl || item.DefaultPictureModel?.ImageUrl || "";
+      if (imgUrl && !imgUrl.startsWith("http")) {
+        imgUrl = `https://gooshishop.com${imgUrl.startsWith('/') ? '' : '/'}${imgUrl}`;
+      }
+
+      const isAvailable = item.StockAvailabilityType === "InStock"
+        && (typeof item.StockQuantity !== "number" || item.StockQuantity > 0)
+        && (item.ProductPrice?.PriceValue > 0);
+
+      const rating = item.ReviewOverviewModel?.TotalReviews > 0
+        ? Math.round((item.ReviewOverviewModel.RatingSum / item.ReviewOverviewModel.TotalReviews) * 10) / 10
+        : 0;
+
+      return {
+        store: "گوشی شاپ",
+        storeColor: "#da532c",
+        name: item.Name || productName,
+        price,
+        originalPrice,
+        discount: Number(item.ProductPrice?.DiscountPercentage || 0),
+        url: createDeemaLink(prodUrl),
+        rawUrl: prodUrl,
+        image: imgUrl,
+        rating,
+        reviewCount: item.ReviewOverviewModel?.TotalReviews || 0,
+        availability: isAvailable,
+        isAffiliate: true,
+        source: "deema"
+      };
+    }).filter(p => p && p.price > 0);
+
+    completeApiRequest(context, { ok: true, status: 200 }, { resultCount: mapped.length });
+    return mapped;
+  } catch (e) {
+    console.warn("[گوشی شاپ] خطا:", e.message);
     return [];
   }
 }

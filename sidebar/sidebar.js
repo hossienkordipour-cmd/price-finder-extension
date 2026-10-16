@@ -31,12 +31,13 @@ function getAffiliateUrl(store, originalUrl) {
     }
   }
 
-  // دیما: تکنولایف و خانومی
-  if (store === "تکنولایف" || store === "خانومی" || store === "technolife" || store === "khanoumi") {
+  // دیما: تکنولایف، خانومی و گوشی شاپ
+  if (store === "تکنولایف" || store === "خانومی" || store === "گوشی شاپ" || store === "technolife" || store === "khanoumi" || store === "gooshishop") {
     if (originalUrl.includes("deemanetwork.com")) return originalUrl;
     try {
-      const b64 = btoa(unescape(encodeURIComponent(originalUrl)));
-      return `https://deemanetwork.com/click/d/6e262f3e_1645_4f22_a310_e67585054a62/${b64}`;
+      // Match the background encoder, including Persian product paths.
+      const b64 = btoa(unescape(encodeURIComponent(new URL(originalUrl).href)));
+      return `https://deemanetwork.com/click/d/6e262f3e_1645_4f22_a310_e67585054a62/${encodeURIComponent(b64)}`;
     } catch (e) {
       console.error("Deema Base64 encoding failed for URL:", originalUrl);
       return originalUrl;

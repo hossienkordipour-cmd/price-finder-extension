@@ -151,7 +151,8 @@
     name = name.split("|")[0].trim();
     name = name.split("–")[0].trim();
     name = name.split(" - ترب")[0].trim();
-    name = name.replace(/\s+(?:ترب|دیجی‌کالا|ایمالز|باسلام)\s*$/i, "").trim();
+    name = name.replace(/\s*قیمت روز\s*$/i, "").trim();
+    name = name.replace(/\s+(?:ترب|دیجی‌کالا|ایمالز|باسلام|گوشی\s*شاپ|گوشی‌شاپ)\s*$/i, "").trim();
 
     // حذف فاصله‌های اضافه
     name = name.replace(/\s+/g, " ").trim();
@@ -249,6 +250,8 @@ let detectionInterval = null;
       product = extractTechnolife();
     } else if (hostname.includes("khanoumi.com")) {
       product = extractKhanoumi();
+    } else if (hostname.includes("gooshishop.com")) {
+      product = extractGooshishop();
     } else if (/^(www\.)?etkala\.ir$/.test(hostname)) {
       product = extractEtkala();
     } else if (hostname.includes("torob.com")) {
@@ -570,6 +573,26 @@ if (product && product.name) {
     }
     const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
     return { name, price, image, source: 'khanoumi', store: 'خانومی', sourceUrl: location.href };
+  }
+
+  function extractGooshishop() {
+    if (!/^\/(?:gsp-\d+|product\/)/i.test(location.pathname)) return null;
+    let name = cleanProductName(document.querySelector('h1')?.textContent?.trim() || document.querySelector('meta[property="og:title"]')?.content);
+    if (!name) return null;
+    let price = null;
+    const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+    for (const s of scripts) {
+      try {
+        const d = JSON.parse(s.textContent);
+        const p = Array.isArray(d) ? d.find(x => x["@type"] === "Product") : (d["@type"] === "Product" ? d : null);
+        if (p?.offers?.price) {
+          price = parsePriceInTomans(p.offers.price, p.offers.priceCurrency || 'IRR');
+          break;
+        }
+      } catch {}
+    }
+    const image = getAbsoluteUrl(document.querySelector('meta[property="og:image"]')?.content);
+    return { name, price, image, source: 'gooshishop', store: 'گوشی شاپ', sourceUrl: location.href };
   }
 
   function extractEtkala() {

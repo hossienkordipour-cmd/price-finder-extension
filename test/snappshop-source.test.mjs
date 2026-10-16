@@ -28,7 +28,7 @@ const context = {
 };
 for (const fn of ['searchDigikala', 'searchTorob', 'searchEmalls', 'searchBasalam',
   'searchDivar', 'searchSheypoor', 'searchMasterKala', 'searchDigipay', 'searchKalaoma',
-  'searchTechnolife', 'searchKhanoumi']) {
+  'searchTechnolife', 'searchKhanoumi', 'searchGooshishop']) {
   context[fn] = async () => [];
 }
 vm.createContext(context);
