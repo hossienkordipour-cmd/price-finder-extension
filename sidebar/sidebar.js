@@ -5,6 +5,10 @@ let currentTabId = null;
 let latestRequestId = 0;
 
 const emptyState = document.getElementById("empty-state");
+const guideState = document.getElementById("guide-state");
+const recentHistoryCard = document.getElementById("recent-history-card");
+const recentHistoryList = document.getElementById("recent-history-list");
+const clearHistoryBtn = document.getElementById("clear-history-btn");
 const loadingState = document.getElementById("loading-state");
 const resultsState = document.getElementById("results-state");
 const errorState = document.getElementById("error-state");
@@ -12,6 +16,73 @@ const currentProductEl = document.getElementById("current-product");
 const resultsListEl = document.getElementById("results-list");
 const sortFilter = document.getElementById("sort-filter");
 const conditionFilter = document.getElementById("condition-filter");
+
+let currentTabUrl = "";
+
+function isGoogleUrl(url) {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname;
+    return host === 'google.com' || host === 'www.google.com' || host.endsWith('.google.com') || host.includes('google.');
+  } catch (e) {
+    return false;
+  }
+}
+
+function loadRecentHistory() {
+  if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) return;
+  chrome.runtime.sendMessage({ type: "GET_RECENT_HISTORY" }, (response) => {
+    if (chrome.runtime.lastError || !response) return;
+    const items = response.history || [];
+    renderRecentHistory(items);
+  });
+}
+
+function renderRecentHistory(items) {
+  if (typeof recentHistoryCard === "undefined" || !recentHistoryCard || !recentHistoryList) return;
+  if (!Array.isArray(items) || items.length === 0) {
+    recentHistoryCard.classList.add("hidden");
+    recentHistoryList.innerHTML = "";
+    return;
+  }
+
+  const displayItems = items.slice(0, 4);
+  recentHistoryList.innerHTML = displayItems.map(item => {
+    const formattedPrice = item.price && item.price > 0 ? `${formatPrice(item.price)} <span>تومان</span>` : 'قیمت نامشخص';
+    const storeName = item.store || 'فروشگاه';
+    const imgUrl = item.image || 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d1d5db%22 stroke-width=%222%22%3E%3Crect x=%223%22 y=%223%22 width=%2218%22 height=%2218%22 rx=%222%22 ry=%222%22/%3E%3C/svg%3E';
+    const href = item.url ? `href="${item.url}" target="_blank" rel="noopener noreferrer"` : 'href="#"';
+    return `
+      <a class="recent-item" ${href}>
+        <img class="recent-item-img" src="${imgUrl}" alt="" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d1d5db%22 stroke-width=%222%22%3E%3Crect x=%223%22 y=%223%22 width=%2218%22 height=%2218%22 rx=%222%22 ry=%222%22/%3E%3C/svg%3E'" />
+        <div class="recent-item-info">
+          <div class="recent-item-name" title="${item.name || ''}">${item.name || 'کالا'}</div>
+          <div class="recent-item-meta">
+            <span class="recent-item-store">${storeName}</span>
+            <div class="recent-item-price">${formattedPrice}</div>
+          </div>
+        </div>
+      </a>
+    `;
+  }).join("");
+
+  recentHistoryCard.classList.remove("hidden");
+}
+
+function updateEmptyOrGuideState() {
+  if (currentProduct) {
+    if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
+    return;
+  }
+  if (typeof emptyState !== "undefined" && emptyState) emptyState.classList.add("hidden");
+  if (typeof guideState !== "undefined" && guideState) {
+    guideState.classList.remove("hidden");
+    if (typeof loadRecentHistory === "function") loadRecentHistory();
+  }
+}
+
+// Initial load
+updateEmptyOrGuideState();
 
 // ==========================================
 // سیستم افیلیت مارکتینگ (همکاری در فروش)
@@ -52,6 +123,25 @@ function getAffiliateUrl(store, originalUrl) {
 document.getElementById("popup-close-btn").addEventListener("click", () => {
   window.parent.postMessage("CLOSE_PIQO_POPUP", "*");
 });
+
+const guideToggle = document.getElementById("guide-accordion-toggle");
+if (guideToggle) {
+  guideToggle.addEventListener("click", () => {
+    const card = guideToggle.closest(".guide-card");
+    if (card) card.classList.toggle("collapsed");
+  });
+}
+
+if (clearHistoryBtn) {
+  clearHistoryBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
+      chrome.runtime.sendMessage({ type: "CLEAR_RECENT_HISTORY" }, () => {
+        renderRecentHistory([]);
+      });
+    }
+  });
+}
 
 document.getElementById("manual-search-form")?.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -141,7 +231,11 @@ chrome.runtime.onMessage.addListener((message) => {
     resultsState.classList.add('hidden');
     loadingState.classList.add('hidden');
     errorState.classList.add('hidden');
-    emptyState.classList.remove('hidden');
+    if (typeof updateEmptyOrGuideState === 'function') {
+      updateEmptyOrGuideState();
+    } else {
+      emptyState.classList.remove('hidden');
+    }
     return;
   }
 
@@ -220,6 +314,7 @@ function generateCardHtml(item, isBase = false) {
 
 function showLoading() {
   emptyState.classList.add("hidden");
+  if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
   errorState.classList.add("hidden");
   resultsState.classList.add("hidden");
   loadingState.classList.remove("hidden");
@@ -234,6 +329,7 @@ function showLoading() {
 
 function showError() {
   emptyState.classList.add("hidden");
+  if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
   loadingState.classList.add("hidden");
   resultsState.classList.add("hidden");
   errorState.classList.remove("hidden");
@@ -262,6 +358,7 @@ function renderResults(results, isLoading = false) {
   }
 
   emptyState.classList.add("hidden");
+  if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
   loadingState.classList.add("hidden");
   errorState.classList.add("hidden");
   resultsState.classList.remove("hidden");
@@ -333,9 +430,23 @@ function renderResults(results, isLoading = false) {
   }
 }
 
+if (typeof chrome !== "undefined" && chrome.tabs && typeof chrome.tabs.query === "function") {
+  chrome.tabs.query({ active: true, lastFocusedWindow: true }, (tabs) => {
+    if (tabs && tabs[0] && tabs[0].url) {
+      currentTabUrl = tabs[0].url;
+      if (!currentProduct && (loadingState.classList.contains("hidden") && resultsState.classList.contains("hidden"))) {
+        updateEmptyOrGuideState();
+      }
+    }
+  });
+}
+
 chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
   if (chrome.runtime.lastError || !response) return;
   if (response.tabId) currentTabId = response.tabId;
+  if (response.url) {
+    currentTabUrl = response.url;
+  }
   const state = response.state;
   if (state?.requestId < latestRequestId) return;
   if (state && state.currentProduct) {
@@ -354,6 +465,8 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
       showLoading();
       chrome.runtime.sendMessage({ type: "START_SEARCH", tabId: currentTabId, product: currentProduct });
     }
+  } else if (!currentProduct) {
+    updateEmptyOrGuideState();
   }
 });
 

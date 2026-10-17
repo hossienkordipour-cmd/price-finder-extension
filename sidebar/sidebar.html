@@ -34,18 +34,42 @@
     </div>
   </div>
 
-  <!-- Empty / Manual Search -->
-  <div id="empty-state" class="state-container">
-    <div class="empty-view">
-      <img src="assets/empty-box.png" alt="Empty Box" class="empty-illustration">
-      <div class="empty-title">اینجا محصولی نمی‌بینم! 🕵️‍♂️</div>
-      <div class="empty-subtitle">برای شروع، وارد صفحه‌ی یه محصول شو تا بگردم و بهترین قیمت‌هاش رو برات پیدا کنم.</div>
-      <form id="manual-search-form" class="manual-search-form" style="margin-top: 24px; display: flex; width: 100%; max-width: 300px; gap: 8px;">
-        <input type="text" id="manual-search-input" placeholder="یا اسم محصول رو جستجو کن..." style="flex: 1; padding: 10px 16px; border: 1px solid #E5E7EB; border-radius: 12px; font-size: 13px; font-family: inherit; outline: none;" />
-        <button type="submit" style="background: var(--text-dark); color: white; border: none; border-radius: 12px; padding: 0 16px; font-weight: 600; cursor: pointer;">بگرد</button>
-      </form>
+  <!-- Guide / Default State (When no product is active) -->
+  <div id="guide-state" class="state-container">
+    <!-- Recent History Card -->
+    <div id="recent-history-card" class="recent-card hidden">
+      <div class="recent-header">
+        <span class="recent-title">آخرین محصولات دیده‌شده</span>
+        <button id="clear-history-btn" class="recent-clear-btn" type="button">پاک کردن</button>
+      </div>
+      <div id="recent-history-list" class="recent-list"></div>
+    </div>
+
+    <div class="guide-card">
+      <div class="guide-header" id="guide-accordion-toggle">
+        <span class="guide-title">راهنما</span>
+        <svg class="guide-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+      </div>
+      <div class="guide-body" id="guide-body">
+        <a href="https://piqoo.ir/install-extension/" target="_blank" rel="noopener noreferrer" class="guide-item">
+          <span class="guide-item-text">راهنمای استفاده از ابزار پیکو</span>
+          <svg class="guide-item-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </a>
+        <a href="mailto:hossienkordipour@gmail.com" target="_blank" rel="noopener noreferrer" class="guide-item">
+          <span class="guide-item-text">ارتباط با پشتیبانی</span>
+          <svg class="guide-item-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+        </a>
+      </div>
     </div>
   </div>
+
+  <div id="empty-state" class="hidden"></div>
 
   <!-- Results Section -->
   <div id="results-state" class="hidden">

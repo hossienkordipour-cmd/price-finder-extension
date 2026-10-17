@@ -136,6 +136,36 @@ function getProductKey(product) {
   return `${product?.source || product?.store || ""}|${product?.sourceUrl || ""}|${normalizeProductText(product?.name || "")}`;
 }
 
+const RECENT_HISTORY_KEY = "recent_products_history";
+
+async function saveToRecentHistory(product) {
+  if (!product || !product.name) return;
+  if (product.source === "manual") return;
+  try {
+    const data = await chrome.storage.local.get([RECENT_HISTORY_KEY]);
+    let list = Array.isArray(data[RECENT_HISTORY_KEY]) ? data[RECENT_HISTORY_KEY] : [];
+    const normName = normalizeProductText(product.name);
+    const prodUrl = product.sourceUrl || product.navigationUrl || "";
+    list = list.filter(item => {
+      if (prodUrl && item.url && item.url === prodUrl) return false;
+      if (normName && item.name && normalizeProductText(item.name) === normName) return false;
+      return true;
+    });
+    list.unshift({
+      name: product.name,
+      image: product.image || "",
+      price: product.price || 0,
+      store: product.store || product.source || "",
+      url: prodUrl,
+      viewedAt: Date.now()
+    });
+    list = list.slice(0, 10);
+    await chrome.storage.local.set({ [RECENT_HISTORY_KEY]: list });
+  } catch (e) {
+    console.warn("Failed to save to recent history:", e);
+  }
+}
+
 async function registerDetectedProduct(tabId, product) {
   if (!Number.isInteger(tabId) || !product?.name) return;
   return runTabOperation(tabId, async () => {
@@ -145,6 +175,8 @@ async function registerDetectedProduct(tabId, product) {
   const productKey = getProductKey(product);
   const pageKey = getPageKey(product.navigationUrl || product.sourceUrl);
   if (currentState?.pageKey && pageKey && currentState.pageKey !== pageKey) return;
+
+  void saveToRecentHistory(product);
 
   if (currentState?.productKey === productKey) {
     await persistTabState(tabId, { ...currentState, currentProduct: product });
@@ -267,11 +299,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "GET_TAB_STATE") {
     const respondForTab = tabId => {
       if (!Number.isInteger(tabId)) {
-        sendResponse({ tabId: null, state: null });
+        sendResponse({ tabId: null, state: null, url: null });
         return;
       }
       Promise.resolve(tabOperations.get(tabId)).then(() => tabStateWrites.get(tabId)).then(() => chrome.storage.local.get([getTabStateKey(tabId)]))
-        .then(data => sendResponse({ tabId, state: data[getTabStateKey(tabId)] || null }));
+        .then(data => {
+          if (typeof chrome !== 'undefined' && chrome.tabs && typeof chrome.tabs.get === 'function') {
+            chrome.tabs.get(tabId, tab => {
+              sendResponse({ tabId, state: data[getTabStateKey(tabId)] || null, url: tab?.url || null });
+            });
+          } else {
+            sendResponse({ tabId, state: data[getTabStateKey(tabId)] || null, url: null });
+          }
+        }).catch(() => sendResponse({ tabId, state: null, url: null }));
     };
 
     if (Number.isInteger(sender.tab?.id)) {
@@ -289,6 +329,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "CLEAR_API_LOGS") {
     clearApiLogs().then(() => sendResponse({ success: true }));
+    return true;
+  }
+
+  if (message.type === "GET_RECENT_HISTORY") {
+    chrome.storage.local.get([RECENT_HISTORY_KEY]).then(data => {
+      sendResponse({ history: Array.isArray(data[RECENT_HISTORY_KEY]) ? data[RECENT_HISTORY_KEY] : [] });
+    }).catch(() => sendResponse({ history: [] }));
+    return true;
+  }
+
+  if (message.type === "CLEAR_RECENT_HISTORY") {
+    chrome.storage.local.remove([RECENT_HISTORY_KEY]).then(() => {
+      sendResponse({ success: true });
+    }).catch(() => sendResponse({ success: false }));
     return true;
   }
 
