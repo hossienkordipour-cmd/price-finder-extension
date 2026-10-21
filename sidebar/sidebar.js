@@ -1,14 +1,65 @@
 
+// The host viewport, not this 380px iframe's width, decides sheet presentation.
+const sheetHandle = document.getElementById('sheet-handle');
+function applyPiqoPanelLayout(mobile, expanded = false) {
+  document.body.classList.toggle('mobile-sheet',mobile);
+  document.documentElement.classList.toggle('mobile-sheet-root',mobile);
+  sheetHandle?.setAttribute('aria-expanded',String(expanded));
+  sheetHandle?.setAttribute('aria-label',expanded ? 'کوچک‌کردن پنل پیکو' : 'بزرگ‌کردن پنل پیکو');
+}
+applyPiqoPanelLayout(window.parent !== window && new URLSearchParams(location.search).get('presentation') === 'sheet');
+window.addEventListener('message',event=>{
+  if (event.source !== window.parent || event.data?.type !== 'PIQO_PANEL_LAYOUT' || typeof event.data.mobile !== 'boolean') return;
+  applyPiqoPanelLayout(event.data.mobile,Boolean(event.data.expanded));
+});
+sheetHandle?.addEventListener('click',()=>window.parent.postMessage('TOGGLE_PIQO_SHEET','*'));
+let sheetDrag = null;
+sheetHandle?.addEventListener('pointerdown',event=>{
+  if (!document.body.classList.contains('mobile-sheet') || event.button !== 0) return;
+  sheetDrag = {id:event.pointerId,y:event.clientY};
+  sheetHandle.setPointerCapture(event.pointerId);
+});
+sheetHandle?.addEventListener('pointerup',event=>{
+  if (!sheetDrag || sheetDrag.id !== event.pointerId) return;
+  const distance = event.clientY-sheetDrag.y;
+  sheetDrag = null;
+  if (Math.abs(distance)<48) return; // A tap uses the accessible click action.
+  // A completed swipe must not also trigger the synthetic click.
+  sheetHandle.addEventListener('click',event=>event.stopImmediatePropagation(),{capture:true,once:true});
+  if (distance>72) window.parent.postMessage('CLOSE_PIQO_POPUP','*');
+  else if (distance < -48 && sheetHandle.getAttribute('aria-expanded') !== 'true') window.parent.postMessage('TOGGLE_PIQO_SHEET','*');
+});
+sheetHandle?.addEventListener('pointercancel',()=>{sheetDrag=null;});
+document.addEventListener('keydown',event=>{
+  if (event.key === 'Escape' && window.parent !== window) window.parent.postMessage('CLOSE_PIQO_POPUP','*');
+});
+
 let currentProduct = null;
 let allResults = [];
 let currentTabId = null;
 let latestRequestId = 0;
+let guideViewOpen = false;
+const guideNavBtn = document.getElementById('guide-nav-btn');
+
+function updateGuideNavigation() {
+  if (!guideNavBtn) return;
+  if (!currentProduct) guideViewOpen = false;
+  document.body.classList.toggle('guide-view-open', guideViewOpen);
+  document.body.classList.toggle('guide-page', guideViewOpen || !currentProduct);
+  guideNavBtn.disabled = !currentProduct;
+  const label = guideViewOpen ? 'بازگشت به محصول و نتایج' : 'راهنما و سابقه';
+  guideNavBtn.setAttribute('aria-label', label);
+  guideNavBtn.setAttribute('title', label);
+  guideNavBtn.setAttribute('aria-pressed', String(guideViewOpen));
+}
 
 const emptyState = document.getElementById("empty-state");
 const guideState = document.getElementById("guide-state");
 const recentHistoryCard = document.getElementById("recent-history-card");
 const recentHistoryList = document.getElementById("recent-history-list");
 const clearHistoryBtn = document.getElementById("clear-history-btn");
+const recentHistoryEmpty = document.getElementById("recent-history-empty");
+let recentHistoryVersion = 0;
 const loadingState = document.getElementById("loading-state");
 const resultsState = document.getElementById("results-state");
 const errorState = document.getElementById("error-state");
@@ -31,45 +82,71 @@ function isGoogleUrl(url) {
 
 function loadRecentHistory() {
   if (typeof chrome === "undefined" || !chrome.runtime || !chrome.runtime.sendMessage) return;
+  const version = ++recentHistoryVersion;
   chrome.runtime.sendMessage({ type: "GET_RECENT_HISTORY" }, (response) => {
+    if (version !== recentHistoryVersion) return;
     if (chrome.runtime.lastError || !response) return;
     const items = response.history || [];
     renderRecentHistory(items);
   });
 }
 
-function renderRecentHistory(items) {
+function renderRecentHistory(items, cleared = false) {
   if (typeof recentHistoryCard === "undefined" || !recentHistoryCard || !recentHistoryList) return;
-  if (!Array.isArray(items) || items.length === 0) {
-    recentHistoryCard.classList.add("hidden");
-    recentHistoryList.innerHTML = "";
-    return;
+  const safeUrl = value => {
+    try { const url = new URL(value); return /^https?:$/.test(url.protocol) && !url.username && !url.password ? url.href : ""; }
+    catch { return ""; }
+  };
+  const displayItems = (Array.isArray(items) ? items : []).filter(item => item?.name && safeUrl(item.url)).slice(0, 4);
+  recentHistoryList.replaceChildren();
+  const boxIcon = '<svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 7 8-4 8 4v10l-8 4-8-4V7Z"/><path d="m4 7 8 4 8-4M12 11v10"/></svg>';
+  for (const item of displayItems) {
+    const row = document.createElement('li');
+    const link = document.createElement('a');
+    link.className = 'recent-item';
+    const host = new URL(item.url).hostname.replace(/^www\./, '');
+    const affiliateStore = ({'basalam.com': 'basalam', 'technolife.com': 'technolife', 'khanoumi.com': 'khanoumi', 'gooshishop.com': 'gooshishop'})[host];
+    link.href = safeUrl(item.affiliateUrl) || safeUrl(getAffiliateUrl(affiliateStore || item.store || item.source, item.url)) || safeUrl(item.url);
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    const picture = document.createElement('span');
+    picture.className = 'recent-item-picture';
+    picture.innerHTML = boxIcon;
+    if (safeUrl(item.image)) {
+      const image = document.createElement('img');
+      image.className = 'recent-item-img'; image.alt = ''; image.width = 64; image.height = 64;
+      image.src = safeUrl(item.image); image.loading = 'lazy';
+      image.addEventListener('error', () => image.remove(), { once: true });
+      picture.append(image);
+    }
+    const info = document.createElement('div'); info.className = 'recent-item-info';
+    const name = document.createElement('div'); name.className = 'recent-item-name';
+    name.textContent = item.name; name.title = item.name; name.dir = 'auto';
+    const meta = document.createElement('div'); meta.className = 'recent-item-meta';
+    const store = document.createElement('span'); store.className = 'recent-item-store';
+    store.textContent = item.store || 'فروشگاه'; store.dir = 'auto'; store.title = store.textContent;
+    const price = document.createElement('div'); price.className = 'recent-item-price';
+    if (Number.isFinite(item.price) && item.price > 0) {
+      price.textContent = formatPrice(item.price);
+      const unit = document.createElement('span'); unit.textContent = 'تومان'; price.append(unit);
+    } else { price.textContent = 'قیمت نامشخص'; price.classList.add('is-unknown'); }
+    const headline = document.createElement('div'); headline.className = 'recent-item-headline';
+    headline.append(name); meta.append(store, price); info.append(headline, meta);
+    link.append(picture, info); row.append(link); recentHistoryList.append(row);
   }
-
-  const displayItems = items.slice(0, 4);
-  recentHistoryList.innerHTML = displayItems.map(item => {
-    const formattedPrice = item.price && item.price > 0 ? `${formatPrice(item.price)} <span>تومان</span>` : 'قیمت نامشخص';
-    const storeName = item.store || 'فروشگاه';
-    const imgUrl = item.image || 'data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d1d5db%22 stroke-width=%222%22%3E%3Crect x=%223%22 y=%223%22 width=%2218%22 height=%2218%22 rx=%222%22 ry=%222%22/%3E%3C/svg%3E';
-    const href = item.url ? `href="${item.url}" target="_blank" rel="noopener noreferrer"` : 'href="#"';
-    return `
-      <a class="recent-item" ${href}>
-        <img class="recent-item-img" src="${imgUrl}" alt="" onerror="this.src='data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22%23d1d5db%22 stroke-width=%222%22%3E%3Crect x=%223%22 y=%223%22 width=%2218%22 height=%2218%22 rx=%222%22 ry=%222%22/%3E%3C/svg%3E'" />
-        <div class="recent-item-info">
-          <div class="recent-item-name" title="${item.name || ''}">${item.name || 'کالا'}</div>
-          <div class="recent-item-meta">
-            <span class="recent-item-store">${storeName}</span>
-            <div class="recent-item-price">${formattedPrice}</div>
-          </div>
-        </div>
-      </a>
-    `;
-  }).join("");
-
+  const hasItems = displayItems.length > 0;
+  recentHistoryList.classList.toggle('hidden', !hasItems);
+  recentHistoryEmpty?.classList.toggle('hidden', hasItems);
+  clearHistoryBtn?.classList.toggle('hidden', !hasItems);
+  const emptyTitle = document.getElementById('recent-empty-title');
+  if (emptyTitle) emptyTitle.textContent = cleared ? 'سابقه‌ات پاک شد' : 'هنوز محصولی اینجا نیست';
+  const status = document.getElementById('recent-history-status');
+  if (status) status.textContent = '';
   recentHistoryCard.classList.remove("hidden");
 }
 
 function updateEmptyOrGuideState() {
+  updateGuideNavigation();
   if (currentProduct) {
     if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
     return;
@@ -123,12 +200,19 @@ function getAffiliateUrl(store, originalUrl) {
 document.getElementById("popup-close-btn").addEventListener("click", () => {
   window.parent.postMessage("CLOSE_PIQO_POPUP", "*");
 });
+guideNavBtn?.addEventListener('click', () => {
+  if (!currentProduct) return;
+  guideViewOpen = !guideViewOpen;
+  updateGuideNavigation();
+  if (guideViewOpen) loadRecentHistory();
+  window.scrollTo(0, 0);
+});
 
 const guideToggle = document.getElementById("guide-accordion-toggle");
 if (guideToggle) {
   guideToggle.addEventListener("click", () => {
     const card = guideToggle.closest(".guide-card");
-    if (card) card.classList.toggle("collapsed");
+    if (card) guideToggle.setAttribute('aria-expanded', String(!card.classList.toggle("collapsed")));
   });
 }
 
@@ -136,12 +220,28 @@ if (clearHistoryBtn) {
   clearHistoryBtn.addEventListener("click", (e) => {
     e.stopPropagation();
     if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.sendMessage) {
-      chrome.runtime.sendMessage({ type: "CLEAR_RECENT_HISTORY" }, () => {
-        renderRecentHistory([]);
+      ++recentHistoryVersion;
+      clearHistoryBtn.disabled = true;
+      chrome.runtime.sendMessage({ type: "CLEAR_RECENT_HISTORY" }, (response) => {
+        clearHistoryBtn.disabled = false;
+        if (chrome.runtime.lastError || !response?.success) {
+          const status = document.getElementById('recent-history-status');
+          if (status) status.textContent = 'سابقه پاک نشد؛ دوباره امتحان کن.';
+          return;
+        }
+        renderRecentHistory([], true);
+        document.getElementById('history-guide-btn')?.focus();
       });
     }
   });
 }
+
+document.getElementById('history-guide-btn')?.addEventListener('click', () => {
+  guideToggle?.closest('.guide-card')?.classList.remove('collapsed');
+  guideToggle?.setAttribute('aria-expanded', 'true');
+  guideToggle?.focus();
+  guideToggle?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+});
 
 document.getElementById("manual-search-form")?.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -313,6 +413,7 @@ function generateCardHtml(item, isBase = false) {
 }
 
 function showLoading() {
+  updateGuideNavigation();
   emptyState.classList.add("hidden");
   if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
   errorState.classList.add("hidden");
@@ -328,6 +429,7 @@ function showLoading() {
 }
 
 function showError() {
+  updateGuideNavigation();
   emptyState.classList.add("hidden");
   if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
   loadingState.classList.add("hidden");
@@ -349,6 +451,7 @@ function generateSkeletonHtml() {
 }
 
 function renderResults(results, isLoading = false) {
+  updateGuideNavigation();
   allResults = results || [];
   if (currentProduct) {
     currentProductEl.innerHTML = generateCardHtml(currentProduct, true);

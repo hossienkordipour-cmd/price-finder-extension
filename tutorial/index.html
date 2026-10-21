@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="مقایسهٔ قیمت با پیکو رو قدم‌به‌قدم امتحان کن؛ بدون نصب افزونه و بدون خرید واقعی.">
+  <title>مقایسهٔ قیمت با پیکو | آموزش تعاملی</title>
+  <link rel="icon" href="./assets/character.png">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body data-step="start">
+  <a class="skip-link" href="#piqo-widget">رفتن به دکمهٔ پیکو</a>
+  <header class="lesson-header">
+    <a class="brand" href="./" aria-label="آموزش پیکو"><img src="./assets/character.png" width="32" height="32" alt=""><img src="./assets/logo.png" width="62" height="30" alt="پیکو"></a>
+    <ol class="progress" aria-label="مراحل آموزش">
+      <li aria-current="step"><span>۱</span><b>بازکردن پیکو</b></li><li><span>۲</span><b>مقایسهٔ قیمت</b></li><li><span>۳</span><b>انتخاب بهتر</b></li>
+    </ol>
+    <button class="text-button restart" type="button">شروع دوباره <span aria-hidden="true">↺</span></button>
+  </header>
+  <div class="lesson-note"><span class="demo-badge">تمرین تعاملی</span> عکس واقعی، قیمت‌های نمایشی؛ هیچ خریدی انجام نمی‌شود.</div>
+
+  <main id="practice" tabindex="-1" inert>
+    <section class="storefront" aria-label="صفحهٔ نمایشی محصول">
+      <header class="shop-header"><div class="shop-brand"><span class="shop-mark" aria-hidden="true">د</span><div><span id="shop-name">دیجینو</span><small id="shop-tagline">دنیای دیجیتال تو</small></div></div><div class="mock-search" aria-hidden="true">جست‌وجوی محصول، برند و مدل… <span>⌕</span></div><span class="sample-label">فروشگاه نمایشی</span></header>
+      <nav class="shop-categories" aria-label="دسته‌بندی نمایشی"><span>کالای دیجیتال</span><span>موبایل و لوازم جانبی</span><span>صدا و تصویر</span><span>خانه و زندگی</span></nav>
+      <div class="breadcrumbs">کالای دیجیتال <span aria-hidden="true">/</span> هدفون <span aria-hidden="true">/</span> هدفون بی‌سیم</div>
+      <div class="product-layout">
+        <div class="product-gallery"><span class="image-caption">APPLE <span>تصویر واقعی محصول</span></span><img class="hero-product" src="./assets/airpods-pro.jpg" width="1309" height="1080" fetchpriority="high" alt="عکس واقعی ایرپاد پرو اپل در کیس شارژ سفید"><div class="gallery-thumbs" aria-hidden="true"><span class="thumb selected"><img src="./assets/airpods-pro.jpg" alt=""></span><span class="gallery-line"></span><span class="gallery-count">۰۱ / ۰۱</span></div></div>
+        <div class="product-details"><span class="eyebrow">هدفون بی‌سیم اپل</span><h1>صدای دلخواهت.<br><span lang="en" dir="ltr">AirPods Pro</span></h1><p class="english-name">هدفون بی‌سیم اپل مدل ایرپاد پرو با کیس شارژ</p><div class="rating"><span aria-label="امتیاز نمایشی ۴٫۶ از ۵">★ ۴٫۶</span><span>از ۱۲۸ دیدگاه نمایشی</span></div><div class="product-color">رنگ: سفید <i aria-hidden="true"></i></div><dl class="specs"><div><dt>اتصال</dt><dd>بی‌سیم</dd></div><div><dt>رنگ</dt><dd>سفید</dd></div><div><dt>همراه محصول</dt><dd>کیس شارژ</dd></div></dl><div class="purchase-card"><div class="seller-line"><span id="seller-label">فروشنده: دیجینو</span><span class="stock">موجود</span></div><p class="warranty">فروشگاه نمونهٔ اول · ارسال رایگان نمایشی</p><div class="purchase-bottom"><div class="product-price"><strong id="page-price">۱۲٬۴۹۰٬۰۰۰</strong><span>تومان</span></div><button class="sample-buy" type="button" aria-describedby="buy-note">افزودن به سبد <span aria-hidden="true">+</span></button></div><p id="buy-note">در این تمرین، کافی است قیمت‌ها را با پیکو مقایسه کنی.</p></div><div id="merchant-arrival" class="merchant-arrival" hidden><span aria-hidden="true">✓</span><div><b>به فروشگاه پیشنهادشده رسیدی</b><p>در استفادهٔ واقعی، خرید را در سایت فروشنده انجام می‌دهی.</p></div></div></div>
+      </div>
+      <footer class="shop-footer"><span>این فروشگاه و قیمت‌هایش نمایشی‌اند.</span><span class="photo-credit" dir="ltr">Photo: <a href="https://www.arne-mueseler.com" target="_blank" rel="noopener noreferrer">Arne Müseler</a> · <a href="https://creativecommons.org/licenses/by-sa/3.0/de/" target="_blank" rel="noopener noreferrer">CC BY-SA 3.0 DE</a></span></footer>
+    </section>
+  </main>
+
+  <div class="scrim" aria-hidden="true"></div>
+  <button id="piqo-widget" class="piqo-widget" type="button" aria-expanded="false" aria-controls="piqo-panel"><img src="./assets/character.png" width="30" height="30" alt=""><span>ارزون‌ترش هست؟</span><span class="widget-arrow" aria-hidden="true">←</span></button>
+
+  <aside id="piqo-panel" class="piqo-panel" aria-label="پنل تمرینی پیکو" hidden>
+    <header class="panel-header"><div class="brand"><img src="./assets/logo.png" width="50" height="24" alt="پیکو"><img src="./assets/character.png" width="32" height="32" alt=""></div><div class="panel-actions"><button id="panel-help" class="icon-button" type="button" aria-label="راهنما"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.05,8.67s-2-.67-2-2c0-.47.17-.93.47-1.29.3-.36.73-.6,1.19-.68.47-.08.94,0,1.35.25.41.24.72.62.87,1.06M7.99,11.33h0M8,1.33c3.68,0,6.67,2.98,6.67,6.67,0,3.68-2.98,6.67-6.67,6.67S1.33,11.68,1.33,8,4.32,1.33,8,1.33Z"/></svg></button><button id="panel-close" class="icon-button" type="button" aria-label="بستن پنل و بازگشت به قدم اول"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></div></header>
+    <div class="base-product"><img src="./assets/airpods-pro.jpg" width="72" height="72" alt=""><div><h2>هدفون بی‌سیم اپل مدل AirPods Pro</h2><p>دیجینو</p><strong>۱۲٬۴۹۰٬۰۰۰ <small>تومان</small></strong></div></div>
+    <div id="demo-loading" class="demo-loading" hidden><span class="loader" aria-hidden="true"></span><p>داریم پیشنهادها رو آماده می‌کنیم…</p><small>این مقایسه فقط برای آموزشه.</small></div>
+    <section id="demo-results" hidden aria-label="پیشنهادهای نمایشی"><div class="results-heading"><h2>محصولات مشابه</h2><button id="layout-toggle" class="grid-button" type="button" aria-label="نمایش شبکه‌ای پیشنهادها" aria-pressed="false"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button></div><div class="filters"><label><span class="sr-only">مرتب‌سازی</span><select id="sort"><option value="match">مرتبط‌ترین</option><option value="cheap">ارزان‌ترین</option><option value="expensive">گران‌ترین</option></select></label><span class="condition-chip">کالای نو</span><span class="results-count">۳ محصول</span></div><div id="offer-list"></div><p class="results-disclaimer">پیشنهادهای این پنل نمایشی‌اند و لینک فروش واقعی ندارند.</p></section>
+  </aside>
+
+  <section id="coach" class="coach" aria-labelledby="coach-title" aria-describedby="coach-copy"><div class="coach-top"><span class="step-label" id="step-label">قدم ۱ از ۳</span><span class="practice-badge">بدون خرید واقعی</span></div><h2 id="coach-title" tabindex="-1">قبل از خرید، پیکو رو باز کن</h2><p id="coach-copy">روی «ارزون‌ترش هست؟» بزن تا قیمت همین محصول رو در فروشگاه‌های دیگه ببینی.</p><div class="coach-bottom"><span id="coach-hint"><i aria-hidden="true"></i> از دکمهٔ پیکو شروع کن</span><button id="coach-restart" type="button" class="text-button" hidden>تکرار آموزش</button></div></section>
+
+  <section id="success" class="success-card" aria-labelledby="success-title" hidden>
+    <div class="success-brand"><img src="./assets/character.png" width="32" height="32" alt=""><img src="./assets/logo.png" width="50" height="24" alt="پیکو"></div>
+    <h2 id="success-title" tabindex="-1"><strong id="saving-amount">۱٬۶۰۰٬۰۰۰</strong><span class="saving-unit">تومان</span><span class="saving-message">کمتر پرداخت می‌کنی</span></h2>
+    <p id="success-copy">آیفون ۱۷ رو در دیجی‌کالا باز کن و پیکو رو امتحان کن.</p>
+    <dl class="sr-only"><div><dt>فروشگاه اول</dt><dd><s id="original-summary">۱۲٬۴۹۰٬۰۰۰</s> تومان</dd></div><div><dt id="chosen-store">فروشگاه انتخاب‌شده</dt><dd><span id="chosen-price">۱۰٬۸۹۰٬۰۰۰</span> تومان</dd></div></dl>
+    <div class="success-actions"><a id="real-test" href="https://www.digikala.com/product/dkp-20127115/گوشی-موبایل-اپل-مدل-iphone-17-ch-دو-سیم-کارت-ظرفیت-256-گیگابایت-و-رم-8-گیگابایت-نات-اکتیو/?product_id=20127115&amp;variant_id=74448669" target="_blank" rel="noopener noreferrer" class="primary-button">حالا واقعی امتحانش کن <span aria-hidden="true">↗</span></a><a class="install-link" href="https://chromewebstore.google.com/detail/%D9%BE%DB%8C%DA%A9%D9%88-piqo-%E2%80%94-%D9%85%D9%82%D8%A7%DB%8C%D8%B3%D9%87-%D9%82%DB%8C%D9%85%D8%AA/kdgpgfdmcobfnklpbkmjbphoebnlgkki?hl=en-US&amp;utm_source=ext_sidebar" target="_blank" rel="noopener noreferrer">پیکو رو نداری؟ نصبش کن</a><button type="button" class="text-button restart">تکرار آموزش</button></div>
+    <small>قیمت‌ها تمرینی‌اند؛ خریدی انجام نشده.</small>
+  </section>
+  <p class="sr-only" id="announcement" role="status" aria-live="polite" aria-atomic="true"></p>
+  <div id="sample-toast" class="sample-toast" role="status" hidden>این صفحه تمرینیه؛ برای مقایسهٔ قیمت، روی پیکو بزن.</div>
+  <noscript><div class="noscript">برای شروع آموزش، جاوااسکریپت مرورگرت رو فعال کن. بعد روی پیکو بزن و پیشنهادها رو مقایسه کن.</div></noscript>
+</body>
+</html>

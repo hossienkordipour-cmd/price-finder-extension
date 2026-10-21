@@ -1,0 +1,11 @@
+Asset: airpods-pro.jpg
+Original title: Apple airpods pro case.jpg
+Photographer: Arne Müseler / arne-mueseler.com
+Author website: https://www.arne-mueseler.com
+Source: https://commons.wikimedia.org/wiki/File:Apple_airpods_pro_case.jpg
+Original file: https://upload.wikimedia.org/wikipedia/commons/6/68/Apple_airpods_pro_case.jpg
+License: Creative Commons Attribution-ShareAlike 3.0 Germany (CC BY-SA 3.0 DE)
+License URL: https://creativecommons.org/licenses/by-sa/3.0/de/
+Changes: None to the downloaded image file. Browser presentation scales/crops the image with object-fit.
+The photograph's license applies to the photograph; the author does not endorse PIQO or the demo's fictional stores and prices.
+Keep the visible author credit and license link in the tutorial footer when publishing. Keep this notice with the image.

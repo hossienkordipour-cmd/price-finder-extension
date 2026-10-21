@@ -14,7 +14,7 @@ const conditionFilter={querySelectorAll:()=>[],querySelector:()=>null};
 const resetButton={addEventListener(_event,handler){resetHandler=handler;}};
 const resultsListEl=element();
 const context={currentProduct:null,allResults:[],currentProductEl:element(),emptyState:element(),loadingState:element(),errorState:element(),resultsState:element(),sortFilter,resultsListEl,
-  generateCardHtml:r=>r.name+';',generateSkeletonHtml:()=>'',document:{querySelectorAll:()=>conditions.map(value=>({dataset:{value}})),getElementById:id=>id==='sort-filter'?sortFilter:id==='condition-filter'?conditionFilter:id==='btn-clear-filters'?resetButton:element()}};
+  updateGuideNavigation(){},generateCardHtml:r=>r.name+';',generateSkeletonHtml:()=>'',document:{querySelectorAll:()=>conditions.map(value=>({dataset:{value}})),getElementById:id=>id==='sort-filter'?sortFilter:id==='condition-filter'?conditionFilter:id==='btn-clear-filters'?resetButton:element()}};
 vm.createContext(context);
 vm.runInContext(script.slice(script.indexOf('function renderResults('),script.indexOf('\nchrome.runtime.sendMessage({ type: "GET_TAB_STATE"')),context);
 const input=[{name:'weak-cheap',price:10,matchScore:0.6},{name:'best-expensive',price:300,matchScore:1},{name:'best-cheap',price:100,matchScore:1},{name:'best-unknown',price:null,matchScore:1},{name:'medium',price:50,matchScore:0.8}];

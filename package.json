@@ -4,7 +4,12 @@
   "type": "module",
   "main": "background.js",
   "scripts": {
+    "dev:tutorial": "node scripts/tutorial-server.mjs",
+    "build:tutorial": "node scripts/build-tutorial.mjs",
+    "test:tutorial": "node test/tutorial.test.mjs",
+    "test:mobile-sheet": "node test/mobile-sheet.test.mjs",
     "build:dev": "node scripts/build-extension.mjs dev",
+    "test:history": "node test/recent-history.test.mjs && node test/recent-history-ui.test.mjs",
     "test:base-price": "node test/base-price-state.test.mjs && node test/digikala-base-price.test.mjs",
     "test:merchant-price": "node test/merchant-price.test.mjs && node test/digipay-merchant-price.test.mjs",
     "test:technolife": "node test/mouse-match.test.mjs && node test/technolife-base-price.test.mjs",
@@ -20,7 +25,7 @@
     "test:r04": "node test/digikala-offer.test.mjs && node test/digikala-offer-source.test.mjs && node test/r04-card-layout.test.mjs",
     "test:digikala-all-sources": "node test/digikala-verifier.test.mjs && node test/digikala-all-sources.test.mjs",
     "build:release": "node scripts/build-extension.mjs release",
-    "test": "node test/deema-source.test.mjs && node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs && node test/piqo-api-client.test.mjs && node test/snappshop-source.test.mjs && node test/merchant-price.test.mjs && node test/digipay-merchant-price.test.mjs && node test/mouse-match.test.mjs && node test/air-fryer-match.test.mjs && node test/iphone-match.test.mjs && node test/r06-match.test.mjs && node test/model-less-match.test.mjs && node test/navigation-state.test.mjs && node test/navigation-panel.test.mjs && node test/sidebar-sort.test.mjs"
+    "test": "node test/deema-source.test.mjs && node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs && node test/piqo-api-client.test.mjs && node test/snappshop-source.test.mjs && node test/merchant-price.test.mjs && node test/digipay-merchant-price.test.mjs && node test/mouse-match.test.mjs && node test/air-fryer-match.test.mjs && node test/iphone-match.test.mjs && node test/r06-match.test.mjs && node test/model-less-match.test.mjs && node test/navigation-state.test.mjs && node test/navigation-panel.test.mjs && node test/sidebar-sort.test.mjs && node test/recent-history.test.mjs"
   },
   "repository": {
     "type": "git",

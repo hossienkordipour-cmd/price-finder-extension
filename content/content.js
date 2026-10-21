@@ -189,7 +189,7 @@
     if (checkNavigation()) return;
     if (!isPiqoSite && records.some(record => {
       const element = record.target.nodeType === 1 ? record.target : record.target.parentElement;
-      return !element?.closest('#piqo-widget-container, #piqo-popup-iframe');
+      return !element?.closest('#piqo-widget-container, #piqo-popup-iframe, #piqo-popup-backdrop');
     })) {
       clearTimeout(metadataTimer);
       metadataTimer = setTimeout(detectProduct, 250);
@@ -231,7 +231,7 @@ let detectionInterval = null;
     const widget = document.getElementById('piqo-widget-container');
     if (widget) widget.remove();
     const popup = document.getElementById('piqo-popup-iframe');
-    if (popup) popup.remove();
+    if (popup) { popup.piqoDestroy?.(); popup.remove(); }
     lastDetectedKey = null; // reset state
   }
 
@@ -316,7 +316,9 @@ if (product && product.name) {
       for (let scope = button.parentElement; scope && scope !== document.body; scope = scope.parentElement) {
         // Stop before reaching a list of unrelated sellers or recommended products.
         if (scope.querySelectorAll('button[data-testid="add-to-cart"]').length > 1) break;
-        const candidates = [...scope.querySelectorAll('[data-testid="price-final"], dds-price[slot="price"][variant="price"]')].filter(isVisible);
+        // Desktop uses price-final / DDS; the mobile buy bar uses price-container.
+        // Keep all three scoped to the selected cart button, never the whole page.
+        const candidates = [...scope.querySelectorAll('[data-testid="price-final"], dds-price[slot="price"][variant="price"], [data-theme-animation="price-container"]')].filter(isVisible);
         if (!candidates.length) {
           // The selected offer's price group can briefly be empty while its
           // variant changes. Do not climb into the shipping section in that case.
@@ -792,7 +794,8 @@ function togglePiqoPopup(isLeft) {
   if (!popup) {
     popup = document.createElement('iframe');
     popup.id = 'piqo-popup-iframe';
-    popup.src = chrome.runtime.getURL('sidebar/sidebar.html');
+    popup.title = 'پیکو — مقایسهٔ قیمت';
+    popup.src = chrome.runtime.getURL('sidebar/sidebar.html') + (window.innerWidth <= 600 ? '?presentation=sheet' : '');
     popup.style.cssText = `
       position: fixed;
       top: 8px;
@@ -812,10 +815,90 @@ function togglePiqoPopup(isLeft) {
     // An empty srcdoc added by page/extension code overrides the extension URL
     // and renders a blank panel. This frame must always load our packaged UI.
     const panelFrame = popup;
+    const backdrop = document.createElement('div');
+    backdrop.id = 'piqo-popup-backdrop';
+    backdrop.setAttribute('aria-hidden','true');
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(17,24,39,.28);z-index:2147483645;display:none;';
+    document.body.appendChild(backdrop);
+    let savedOverflow = null;
+    let closeTimer;
+    panelFrame.piqoExpanded = false;
+    const unlockPage = () => {
+      if (savedOverflow !== null) {
+        document.documentElement.style.overflow = savedOverflow;
+        savedOverflow = null;
+      }
+    };
+    const syncLayout = () => {
+      const mobile = window.innerWidth <= 600;
+      const open = panelFrame.style.display !== 'none' && panelFrame.style.opacity !== '0';
+      panelFrame.piqoMobile = mobile;
+      const style = panelFrame.style;
+      style.transitionDuration = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? '0s' : '0.3s';
+      if (mobile) {
+        style.boxSizing = 'border-box';
+        const viewport = window.visualViewport;
+        const availableHeight = viewport?.height || window.innerHeight;
+        style.top = 'auto'; style.left = '0px'; style.right = '0px';
+        style.bottom = `${Math.max(0,window.innerHeight-availableHeight-(viewport?.offsetTop || 0))}px`;
+        style.width = '100%'; style.height = `${Math.round(availableHeight*(panelFrame.piqoExpanded ? .94 : .76))}px`;
+        style.maxHeight = 'none'; style.borderRadius = '24px 24px 0 0';
+        style.boxShadow = '0 -8px 36px rgba(10,10,10,.18)';
+        if (open && savedOverflow === null) {
+          savedOverflow = document.documentElement.style.overflow;
+          document.documentElement.style.overflow = 'hidden';
+        }
+      } else {
+        style.boxSizing = 'content-box';
+        style.top = '8px'; style.bottom = 'auto'; style.width = '380px';
+        style.height = 'calc(100vh - 16px)'; style.maxHeight = '800px';
+        style.borderRadius = '24px'; style.boxShadow = '0 12px 36px rgba(10,10,10,.12)';
+        style.left = panelFrame.piqoIsLeft ? '8px' : 'auto';
+        style.right = panelFrame.piqoIsLeft ? 'auto' : '8px';
+        unlockPage();
+      }
+      backdrop.style.display = mobile && open ? 'block' : 'none';
+      panelFrame.contentWindow?.postMessage({type:'PIQO_PANEL_LAYOUT',mobile,expanded:panelFrame.piqoExpanded},'*');
+    };
+    panelFrame.piqoSyncLayout = syncLayout;
+    panelFrame.piqoClose = () => {
+      panelFrame.style.opacity = '0';
+      panelFrame.style.transform = panelFrame.piqoMobile ? 'translateY(100%)' : (panelFrame.piqoIsLeft ? 'translateX(-40px)' : 'translateX(40px)');
+      backdrop.style.display = 'none'; unlockPage();
+      const currentWidget = document.getElementById('piqo-widget-container');
+      if (currentWidget) {
+        currentWidget.style.opacity = '1'; currentWidget.style.pointerEvents = 'auto';
+        currentWidget.querySelector('#piqo-main-btn')?.setAttribute('aria-expanded','false');
+      }
+      clearTimeout(closeTimer);
+      closeTimer = setTimeout(()=>{
+        if (panelFrame.style.opacity === '0') {
+          panelFrame.style.display = 'none';
+          currentWidget?.querySelector('#piqo-main-btn')?.focus({preventScroll:true});
+        }
+      },300);
+    };
+    const escapePanel = event => {
+      if (event.key === 'Escape' && panelFrame.style.opacity === '1') panelFrame.piqoClose();
+    };
+    backdrop.addEventListener('click',panelFrame.piqoClose);
+    window.addEventListener('resize',syncLayout);
+    window.visualViewport?.addEventListener('resize',syncLayout);
+    window.visualViewport?.addEventListener('scroll',syncLayout);
+    window.addEventListener('keydown',escapePanel);
+    panelFrame.addEventListener('load',syncLayout);
+    panelFrame.piqoDestroy = () => {
+      clearTimeout(closeTimer); unlockPage(); backdrop.remove(); panelObserver.disconnect();
+      window.removeEventListener('resize',syncLayout);
+      window.visualViewport?.removeEventListener('resize',syncLayout);
+      window.visualViewport?.removeEventListener('scroll',syncLayout);
+      window.removeEventListener('keydown',escapePanel);
+    };
     const restorePanelSource = () => {
       if (panelFrame.hasAttribute('srcdoc')) panelFrame.removeAttribute('srcdoc');
     };
-    new MutationObserver(restorePanelSource).observe(panelFrame, {
+    const panelObserver = new MutationObserver(restorePanelSource);
+    panelObserver.observe(panelFrame, {
       attributes: true,
       attributeFilter: ['srcdoc'],
     });
@@ -823,19 +906,22 @@ function togglePiqoPopup(isLeft) {
     restorePanelSource();
   }
 
-  const slideStart = isLeft ? 'translateX(-40px)' : 'translateX(40px)';
+  popup.piqoIsLeft = Boolean(isLeft);
+  popup.piqoSyncLayout();
+  const slideStart = popup.piqoMobile ? 'translateY(100%)' : (isLeft ? 'translateX(-40px)' : 'translateX(40px)');
 
   // Update position
-  if (isLeft) {
+  if (!popup.piqoMobile && isLeft) {
     popup.style.right = 'auto';
     popup.style.left = '8px';
-  } else {
+  } else if (!popup.piqoMobile) {
     popup.style.left = 'auto';
     popup.style.right = '8px';
   }
 
   // Toggle
   if (popup.style.display === 'none' || popup.style.opacity === '0') {
+    chrome.runtime.sendMessage({ type: 'PIQO_OPENED', url: location.href }).catch(() => {});
     // Prep animation
     popup.style.transform = slideStart;
     popup.style.display = 'block';
@@ -851,43 +937,21 @@ function togglePiqoPopup(isLeft) {
     // force reflow
     void popup.offsetWidth;
     popup.style.opacity = '1';
-    popup.style.transform = 'translateX(0)';
+    popup.style.transform = popup.piqoMobile ? 'translateY(0)' : 'translateX(0)';
+    popup.piqoSyncLayout();
   } else {
-    popup.style.opacity = '0';
-    popup.style.transform = slideStart;
-    
-    // Show Widget
-    if (widget) {
-      widget.style.opacity = '1';
-      widget.style.pointerEvents = 'auto';
-      widget.querySelector('#piqo-main-btn')?.setAttribute('aria-expanded', 'false');
-    }
-
-    setTimeout(() => {
-      if (popup.style.opacity === '0') popup.style.display = 'none';
-    }, 300);
+    popup.piqoClose();
   }
 }
 
 // Listen for close request from the iframe
 window.addEventListener('message', (event) => {
-  if (event.data === 'CLOSE_PIQO_POPUP') {
-    let popup = document.getElementById('piqo-popup-iframe');
-    let widget = document.getElementById('piqo-widget-container');
-    
-    if (popup) {
-      const isLeft = popup.style.left === '8px';
-      popup.style.opacity = '0';
-      popup.style.transform = isLeft ? 'translateX(-40px)' : 'translateX(40px)';
-      
-      if (widget) {
-        widget.style.opacity = '1';
-        widget.style.pointerEvents = 'auto';
-        widget.querySelector('#piqo-main-btn')?.setAttribute('aria-expanded', 'false');
-      }
-      
-      setTimeout(() => { popup.style.display = 'none'; }, 300);
-    }
+  const popup = document.getElementById('piqo-popup-iframe');
+  if (!popup || event.source !== popup.contentWindow) return;
+  if (event.data === 'CLOSE_PIQO_POPUP') popup.piqoClose?.();
+  if (event.data === 'TOGGLE_PIQO_SHEET' && popup.piqoMobile) {
+    popup.piqoExpanded = !popup.piqoExpanded;
+    popup.piqoSyncLayout?.();
   }
 });
 

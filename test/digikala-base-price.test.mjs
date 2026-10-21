@@ -75,6 +75,35 @@ try {
   await page.waitForFunction(()=>window.detected.at(-1).product.price===null,{timeout:3000});
   console.log('PASS: missing DDS selling price cannot become shipping price');
 
+  // Captured mobile structure from the iPhone 17 buy bar (dkp-20127115).
+  await page.setViewport({width:390,height:844});
+  await page.evaluate(()=>{
+    document.querySelector('#selected-offer').innerHTML=`<div class="w-full flex justify-between gap-3">
+      <div><button data-cro-id="pdp-add-to-cart" data-testid="add-to-cart" data-add-to-cart-variant-id="74448669">افزودن به سبد خرید</button></div>
+      <div><div class="line-through">۳۶۹,۹۹۹,۰۰۰</div><div class="text-h3-bold-compact"><div class="relative"><div class="flex items-center gap-1">
+        <div data-theme-animation="price-container">۳۶۲,۹۹۹,۰۰۰</div><span><dds-icon name="value-toman"></dds-icon></span>
+      </div></div></div></div></div>`;
+    const insurance=document.createElement('aside');insurance.id='mobile-insurance';
+    insurance.innerHTML='<div data-theme-animation="price-container">۶,۱۰۵,۰۰۰</div><dds-icon name="value-toman"></dds-icon><p>بیمه</p>';
+    document.body.prepend(insurance);
+  });
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===362_999_000&&window.detected.at(-1).product.variantId==='74448669',{timeout:3000});
+  console.log('PASS: real mobile price-container reads the selected offer, not insurance or crossed-out price');
+  await page.evaluate(()=>{
+    document.querySelector('#selected-offer [data-theme-animation="price-container"]').textContent='۳۶۰,۰۰۰,۰۰۰';
+    document.querySelector('#selected-offer button').setAttribute('data-add-to-cart-variant-id','mobile-new-color');
+  });
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===360_000_000&&window.detected.at(-1).product.variantId==='mobile-new-color',{timeout:3000});
+  await page.evaluate(()=>document.querySelector('#selected-offer [data-theme-animation="price-container"]').textContent='');
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===null,{timeout:3000});
+  console.log('PASS: mobile variant updates and an empty price never uses insurance or another seller');
+  await page.evaluate(()=>{
+    document.querySelector('#selected-offer [data-theme-animation="price-container"]').textContent='۳۶۰,۰۰۰,۰۰۰';
+    document.querySelector('#selected-offer button').disabled=true;
+  });
+  await page.waitForFunction(()=>window.detected.at(-1).product.price===null,{timeout:3000});
+  console.log('PASS: unavailable mobile offer stays unknown');
+
   const panel=await browser.newPage();
   const panelHtml=await readFile(new URL('../sidebar/sidebar.html',import.meta.url),'utf8');
   const panelScript=await readFile(new URL('../sidebar/sidebar.js',import.meta.url),'utf8');

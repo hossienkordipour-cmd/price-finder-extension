@@ -11,7 +11,8 @@ try {
   page.on('request',req=>req.respond({status:200,contentType:'text/html',body:req.url().endsWith('/panel') ? '<h1>PIQO panel loaded</h1>' : '<body></body>'}));
   await page.goto('https://fixture.test/');
   await page.evaluate(()=>{
-    window.chrome={runtime:{getURL:()=> 'https://fixture.test/panel'}};
+    window.panelOpenMessages=[];
+    window.chrome={runtime:{getURL:()=> 'https://fixture.test/panel',sendMessage:message=>{window.panelOpenMessages.push(message);return Promise.resolve();}}};
     // Reproduce external code adding empty srcdoc to the panel frame.
     const append=document.body.appendChild.bind(document.body);
     document.body.appendChild=node=>{if(node.tagName==='IFRAME') node.setAttribute('srcdoc',''); return append(node);};
@@ -26,5 +27,6 @@ try {
   await page.evaluate(()=>{togglePiqoPopup(false); togglePiqoPopup(false);});
   assert.equal(await page.$eval('iframe',e=>e.style.opacity),'1');
   assert.equal(await page.$$eval('iframe',frames=>frames.length),1);
+  assert.equal(await page.evaluate(()=>window.panelOpenMessages.filter(message=>message.type==='PIQO_OPENED').length),2);
   console.log('PASS: panel survives empty srcdoc on insertion and later mutation; close/reopen keeps one working frame');
 } finally {await browser.close();}

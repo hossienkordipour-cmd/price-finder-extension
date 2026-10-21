@@ -108,6 +108,7 @@ function invalidateTabPage(tabId, url, force = false) {
     const current = (await chrome.storage.local.get([key]))[key];
     const pageKey = getPageKey(url);
     if (!force && pageKey === (current?.pageKey || getPageKey(current?.currentProduct?.navigationUrl || current?.currentProduct?.sourceUrl))) return;
+    historyOpenPages.delete(tabId);
     const requestId = tabSearches.begin(tabId, current?.requestId);
     await persistTabState(tabId, { currentProduct: null, productKey: null, searchResults: null,
       isLoading: false, error: null, pageKey, requestId, updatedAt: Date.now() });
@@ -137,33 +138,96 @@ function getProductKey(product) {
 }
 
 const RECENT_HISTORY_KEY = "recent_products_history";
+const historyOpenPages = new Map();
+let recentHistoryWrites = Promise.resolve();
+let recentHistoryGeneration = 0;
 
-async function saveToRecentHistory(product) {
-  if (!product || !product.name) return;
-  if (product.source === "manual") return;
+function runHistoryOperation(task) {
+  const operation = recentHistoryWrites.catch(() => {}).then(task);
+  recentHistoryWrites = operation;
+  return operation;
+}
+
+function getHistoryUrl(value) {
   try {
+    const url = new URL(getPageKey(value));
+    return /^https?:$/.test(url.protocol) && !url.username && !url.password ? url.href : "";
+  } catch { return ""; }
+}
+
+function saveToRecentHistory(product, metadataOnly = false) {
+  if (!product?.name || product.source === "manual") return Promise.resolve();
+  const prodUrl = getHistoryUrl(product.sourceUrl || product.navigationUrl);
+  if (!prodUrl) return Promise.resolve();
+  return runHistoryOperation(async () => {
     const data = await chrome.storage.local.get([RECENT_HISTORY_KEY]);
     let list = Array.isArray(data[RECENT_HISTORY_KEY]) ? data[RECENT_HISTORY_KEY] : [];
     const normName = normalizeProductText(product.name);
-    const prodUrl = product.sourceUrl || product.navigationUrl || "";
-    list = list.filter(item => {
-      if (prodUrl && item.url && item.url === prodUrl) return false;
-      if (normName && item.name && normalizeProductText(item.name) === normName) return false;
-      return true;
-    });
-    list.unshift({
+    const matches = item => getHistoryUrl(item.url) === prodUrl
+      || (!item.url && item.name && normalizeProductText(item.name) === normName);
+    const existingIndex = list.findIndex(matches);
+    // Late metadata must not resurrect cleared items or reorder history.
+    if (metadataOnly && existingIndex < 0) return;
+    const entry = {
       name: product.name,
       image: product.image || "",
-      price: product.price || 0,
+      price: Number.isFinite(product.price) && product.price > 0 ? product.price : 0,
       store: product.store || product.source || "",
       url: prodUrl,
-      viewedAt: Date.now()
-    });
+      affiliateUrl: existingIndex >= 0 ? list[existingIndex].affiliateUrl || '' : '',
+      viewedAt: metadataOnly ? list[existingIndex].viewedAt : Date.now(),
+    };
+    if (metadataOnly) list[existingIndex] = entry;
+    else {
+      list = list.filter(item => !matches(item));
+      list.unshift(entry);
+    }
     list = list.slice(0, 10);
     await chrome.storage.local.set({ [RECENT_HISTORY_KEY]: list });
-  } catch (e) {
-    console.warn("Failed to save to recent history:", e);
-  }
+  }).catch(error => console.warn("Failed to save to recent history:", error));
+}
+
+// Keep supplied signed links intact; only associate an exact product destination.
+function attachHistoryAffiliateLinks(results) {
+  return runHistoryOperation(async () => {
+    const data = await chrome.storage.local.get([RECENT_HISTORY_KEY]);
+    const list = Array.isArray(data[RECENT_HISTORY_KEY]) ? data[RECENT_HISTORY_KEY] : [];
+    let changed = false;
+    for (const offer of Array.isArray(results) ? results : []) {
+      try {
+        const tracking = new URL(offer.originalAffiliateUrl || offer.url);
+        if (tracking.protocol !== 'https:' || tracking.hostname !== 'publisher.affilio.ir' || tracking.username || tracking.password) continue;
+        const destination = getHistoryUrl(offer.sourceUrl || tracking.searchParams.get('p'));
+        if (!destination) continue;
+        for (const entry of list) {
+          if (getHistoryUrl(entry.url) !== destination || entry.affiliateUrl === tracking.href) continue;
+          entry.affiliateUrl = tracking.href;
+          changed = true;
+        }
+      } catch { /* Missing or malformed affiliate links retain the direct URL. */ }
+    }
+    if (changed) await chrome.storage.local.set({[RECENT_HISTORY_KEY]: list});
+  }).catch(error => console.warn('Failed to attach history affiliate links:', error));
+}
+
+function recordOpenedProduct(tabId, url) {
+  if (!Number.isInteger(tabId)) return Promise.resolve();
+  const generation = recentHistoryGeneration;
+  return runTabOperation(tabId, async () => {
+    const pageKey = getPageKey(url);
+    if (!getHistoryUrl(url)) return;
+    const state = (await chrome.storage.local.get([getTabStateKey(tabId)]))[getTabStateKey(tabId)];
+    if (generation !== recentHistoryGeneration) return;
+    if (state?.pageKey && state.pageKey !== pageKey) return;
+    const intent = { pageKey, productKey: null };
+    historyOpenPages.set(tabId, intent);
+    const product = state?.currentProduct;
+    if (product && getPageKey(product.navigationUrl || product.sourceUrl) === pageKey) {
+      await saveToRecentHistory(product);
+      await attachHistoryAffiliateLinks(state.searchResults);
+      intent.productKey = getProductKey(product);
+    }
+  });
 }
 
 async function registerDetectedProduct(tabId, product) {
@@ -176,7 +240,11 @@ async function registerDetectedProduct(tabId, product) {
   const pageKey = getPageKey(product.navigationUrl || product.sourceUrl);
   if (currentState?.pageKey && pageKey && currentState.pageKey !== pageKey) return;
 
-  void saveToRecentHistory(product);
+  const historyIntent = historyOpenPages.get(tabId);
+  if (historyIntent?.pageKey === pageKey) {
+    await saveToRecentHistory(product, historyIntent.productKey === productKey);
+    historyIntent.productKey = productKey;
+  }
 
   if (currentState?.productKey === productKey) {
     await persistTabState(tabId, { ...currentState, currentProduct: product });
@@ -229,11 +297,13 @@ function startTabSearch(tabId, product, options = {}) {
     onProgress: (partialResults) => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       persistTabState(tabId, { ...loadingState, searchResults: partialResults }, true);
+      attachHistoryAffiliateLinks(partialResults);
       broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId, isPartial: true });
     }
   })
     .then(results => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
+      attachHistoryAffiliateLinks(results);
       return persistTabState(tabId, {
         currentProduct: product,
         searchResults: results,
@@ -263,6 +333,16 @@ function startTabSearch(tabId, product, options = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "PIQO_OPENED") {
+    const tabId = sender.tab?.id;
+    if (!Number.isInteger(tabId) || getPageKey(sender.tab?.url) !== getPageKey(message.url)) {
+      sendResponse({ success: false });
+      return false;
+    }
+    recordOpenedProduct(tabId, message.url).then(() => sendResponse({ success: true }))
+      .catch(() => sendResponse({ success: false }));
+    return true;
+  }
   if (message.type === 'PAGE_CHANGED' || message.type === 'PRODUCT_CLEARED') {
     if (sender.tab?.url && getPageKey(sender.tab.url) !== getPageKey(message.url)) {
       sendResponse({ success: false });
@@ -333,14 +413,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === "GET_RECENT_HISTORY") {
-    chrome.storage.local.get([RECENT_HISTORY_KEY]).then(data => {
+    runHistoryOperation(() => chrome.storage.local.get([RECENT_HISTORY_KEY])).then(data => {
       sendResponse({ history: Array.isArray(data[RECENT_HISTORY_KEY]) ? data[RECENT_HISTORY_KEY] : [] });
     }).catch(() => sendResponse({ history: [] }));
     return true;
   }
 
   if (message.type === "CLEAR_RECENT_HISTORY") {
-    chrome.storage.local.remove([RECENT_HISTORY_KEY]).then(() => {
+    recentHistoryGeneration += 1;
+    historyOpenPages.clear();
+    runHistoryOperation(() => chrome.storage.local.remove([RECENT_HISTORY_KEY])).then(() => {
       sendResponse({ success: true });
     }).catch(() => sendResponse({ success: false }));
     return true;
@@ -368,6 +450,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 chrome.tabs.onRemoved.addListener(tabId => {
   tabSearches.clear(tabId);
+  historyOpenPages.delete(tabId);
   chrome.storage.local.remove(getTabStateKey(tabId));
 });
 

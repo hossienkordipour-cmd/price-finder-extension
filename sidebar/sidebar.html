@@ -8,15 +8,22 @@
 </head>
 <body>
   <header class="header">
+    <button id="sheet-handle" class="sheet-handle" type="button" aria-label="بزرگ‌کردن پنل پیکو" aria-expanded="false"><span aria-hidden="true"></span></button>
     <div class="header-logo">
       <div class="logo-wrapper">
         <img class="primary-logo" src="primary-logo.png" width="50" height="24" style="object-fit: contain;" alt="PIQO" />
         <img class="character-logo" src="assets/logo-character.png" alt="piqo character" />
       </div>
     </div>
-    <button id="popup-close-btn" class="header-close-btn">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-    </button>
+    <div class="header-actions">
+      <button id="guide-nav-btn" class="header-close-btn" type="button" aria-label="راهنما و سابقه" title="راهنما و سابقه" aria-pressed="false" disabled>
+        <svg class="guide-nav-home" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.05,8.67s-2-.67-2-2c0-.47.17-.93.47-1.29.3-.36.73-.6,1.19-.68.47-.08.94,0,1.35.25.41.24.72.62.87,1.06M7.99,11.33h0M8,1.33c3.68,0,6.67,2.98,6.67,6.67,0,3.68-2.98,6.67-6.67,6.67S1.33,11.68,1.33,8,4.32,1.33,8,1.33Z"/></svg>
+        <svg class="guide-nav-back" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 5 7 7-7 7M19 12H5"/></svg>
+      </button>
+      <button id="popup-close-btn" class="header-close-btn" type="button" aria-label="بستن پیکو" title="بستن پیکو">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
   </header>
 
   <!-- Base Product -->
@@ -36,22 +43,13 @@
 
   <!-- Guide / Default State (When no product is active) -->
   <div id="guide-state" class="state-container">
-    <!-- Recent History Card -->
-    <div id="recent-history-card" class="recent-card hidden">
-      <div class="recent-header">
-        <span class="recent-title">آخرین محصولات دیده‌شده</span>
-        <button id="clear-history-btn" class="recent-clear-btn" type="button">پاک کردن</button>
-      </div>
-      <div id="recent-history-list" class="recent-list"></div>
-    </div>
-
     <div class="guide-card">
-      <div class="guide-header" id="guide-accordion-toggle">
+      <button class="guide-header" id="guide-accordion-toggle" type="button" aria-expanded="true" aria-controls="guide-body">
         <span class="guide-title">راهنما</span>
         <svg class="guide-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="18 15 12 9 6 15"></polyline>
         </svg>
-      </div>
+      </button>
       <div class="guide-body" id="guide-body">
         <a href="https://piqoo.ir/install-extension/" target="_blank" rel="noopener noreferrer" class="guide-item">
           <span class="guide-item-text">راهنمای استفاده از ابزار پیکو</span>
@@ -67,6 +65,31 @@
         </a>
       </div>
     </div>
+
+    <!-- Recent History Card -->
+    <section id="recent-history-card" class="recent-card hidden" aria-labelledby="recent-history-title">
+      <div class="recent-header">
+        <div class="recent-heading">
+          <span class="recent-heading-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11a9 9 0 1 1 2.7 7"/><path d="M3 4v7h7"/><path d="M12 7v5l3 2"/></svg></span>
+          <h2 id="recent-history-title" class="recent-title">آخرین محصولات دیده‌شده</h2>
+        </div>
+        <button id="clear-history-btn" class="recent-clear-btn hidden" type="button" aria-label="پاک کردن سابقه محصولات">
+          پاک کردن
+        </button>
+      </div>
+      <ul id="recent-history-list" class="recent-list"></ul>
+      <div id="recent-history-empty" class="recent-empty hidden">
+        <div class="recent-empty-art" aria-hidden="true">
+          <span class="recent-empty-sheet recent-empty-sheet-back"></span>
+          <span class="recent-empty-sheet"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 7 8-4 8 4v10l-8 4-8-4V7Z"/><path d="m4 7 8 4 8-4M12 11v10M8 5l8 4"/></svg><i></i><i></i></span>
+          <span class="recent-empty-spark"></span>
+        </div>
+        <h3 id="recent-empty-title">هنوز محصولی اینجا نیست</h3>
+        <p>توی صفحهٔ یک محصول، پیکو رو باز کن؛<br>دفعهٔ بعد همین‌جا پیداش می‌کنی.</p>
+        <button id="history-guide-btn" class="recent-guide-btn" type="button">چطور از پیکو استفاده کنم؟<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 7-5 5 5 5"/></svg></button>
+      </div>
+      <p id="recent-history-status" class="recent-status" role="status" aria-live="polite"></p>
+    </section>
   </div>
 
   <div id="empty-state" class="hidden"></div>
