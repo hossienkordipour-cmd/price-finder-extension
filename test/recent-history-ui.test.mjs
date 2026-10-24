@@ -54,10 +54,10 @@ try {
   assert.equal(await page.$eval('#history-guide-btn', el => getComputedStyle(el).backgroundColor), 'rgb(23, 23, 23)');
   assert.equal(await page.$eval('#history-guide-btn', el => getComputedStyle(el).color), 'rgb(255, 255, 255)');
   await page.screenshot({path: join(screenshotDir, 'empty.png')});
-  await page.click('#guide-accordion-toggle');
-  await page.click('#history-guide-btn');
-  assert.equal(await page.$eval('#guide-accordion-toggle', el => el.getAttribute('aria-expanded')), 'true');
-  assert.equal(await page.$eval('#guide-accordion-toggle', el => el === document.activeElement), true);
+  for (const selector of ['.guide-item', '#history-guide-btn']) {
+    assert.deepEqual(await page.$eval(selector, el => [el.getAttribute('href'), el.target, el.rel]),
+      ['https://piqoo.ir/tutorial/', '_blank', 'noopener noreferrer'], 'Both guide links open the online tutorial safely');
+  }
   const cover = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect x="9" y="2" width="30" height="44" rx="4" fill="#164c38"/><path d="M16 13h17M16 18h14M16 34h17" stroke="#c5e8b2" stroke-width="2"/></svg>');
   const entries = [
     {name: 'مجموعه کتاب The Lord of the Rings اثر جی. آر. آر. تالکین', store: 'zabanmehrpub.com', price: 2450000},

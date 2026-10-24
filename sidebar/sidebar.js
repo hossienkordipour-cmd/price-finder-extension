@@ -236,12 +236,7 @@ if (clearHistoryBtn) {
   });
 }
 
-document.getElementById('history-guide-btn')?.addEventListener('click', () => {
-  guideToggle?.closest('.guide-card')?.classList.remove('collapsed');
-  guideToggle?.setAttribute('aria-expanded', 'true');
-  guideToggle?.focus();
-  guideToggle?.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-});
+
 
 document.getElementById("manual-search-form")?.addEventListener("submit", (e) => {
   e.preventDefault();

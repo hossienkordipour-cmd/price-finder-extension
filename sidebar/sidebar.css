@@ -324,6 +324,7 @@ body.guide-view-open #empty-state { display: none !important; }
 .recent-empty h3 { color: var(--piqo-ink); font-size: 15px; font-weight: 700; line-height: 1.8; margin-bottom: 6px; }
 .recent-empty p { font-size: 12px; color: var(--text-gray); line-height: 1.9; }
 .recent-guide-btn {
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
