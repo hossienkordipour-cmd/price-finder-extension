@@ -29,6 +29,10 @@ const runtimePaths = [
   "merchant-price.js",
   "tab-state.js",
   "api-logger.js",
+  "diagnostics.js",
+  "request-diagnostics.js",
+  "survey.js",
+  "usage.js",
   "search-cache.js",
   "piqo-api-client.js",
   "content",
@@ -49,6 +53,13 @@ const outputManifestPath = path.join(outputDirectory, "manifest.json");
 const manifest = JSON.parse(await readFile(outputManifestPath, "utf8"));
 
 if (buildMode === "dev") {
+  // Only diagnostics/surveys are local. Search requires the configured PIQO API.
+  const clientPath = path.join(outputDirectory, 'piqo-api-client.js');
+  await writeFile(clientPath, (await readFile(clientPath, 'utf8')).replace(
+    'export const PIQO_MONITORING_BASE_URL = "https://api.piqoo.ir";',
+    'export const PIQO_MONITORING_BASE_URL = "http://127.0.0.1:3000";',
+  ));
+  manifest.host_permissions.push('http://127.0.0.1:3000/*');
   manifest.name = "پیکو | PIQO DEV — مقایسه قیمت";
   manifest.short_name = "PIQO DEV";
   manifest.version_name = `${manifest.version}-dev`;

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>piqo</title>
   <link rel="stylesheet" href="sidebar.css" />
+  <link rel="stylesheet" href="survey.css">
 </head>
 <body>
   <header class="header">
@@ -148,6 +149,18 @@
     <p style="font-size: 12px; color: var(--text-light);">خطا در جستجو</p>
   </div>
 
+  <section id="piqo-survey" aria-labelledby="survey-title" hidden>
+    <div class="survey-heading"><h2 id="survey-title">پیکو برات مفید بود؟</h2><button type="button" data-dismiss aria-label="بستن نظرسنجی">فعلاً نه</button></div>
+    <form>
+      <fieldset><legend class="sr-only">نظرت دربارهٔ پیکو</legend><label><input type="radio" name="answer" value="yes" required>بله</label><label><input type="radio" name="answer" value="no">خیر</label></fieldset>
+      <label for="survey-reason">دلیلش چیه؟ <span>(اختیاری)</span></label>
+      <textarea id="survey-reason" name="reason" maxlength="1000" rows="3" aria-describedby="survey-help"></textarea>
+      <small id="survey-help">تا ۱۰۰۰ حرف؛ لطفاً اطلاعات شخصی ننویس.</small>
+      <button type="submit">ارسال نظر</button>
+    </form>
+    <p role="status" aria-live="polite"></p>
+  </section>
+  <script src="survey-ui.js"></script>
   <script src="sidebar.js"></script>
 </body>
 </html>

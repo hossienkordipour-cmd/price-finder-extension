@@ -1,4 +1,6 @@
 export const PIQO_API_BASE_URL = "https://api.piqoo.ir";
+// DEV builds override only this destination; product searches still use PIQO API.
+export const PIQO_MONITORING_BASE_URL = "https://api.piqoo.ir";
 
 export function parsePiqoApiResponse(payload) {
   if (!payload || !Array.isArray(payload.results)) return [];

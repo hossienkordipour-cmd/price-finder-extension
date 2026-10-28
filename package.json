@@ -23,9 +23,13 @@
     "test:sidebar-sort": "node test/sidebar-sort.test.mjs",
     "test:navigation": "node test/navigation-state.test.mjs && node test/navigation-panel.test.mjs && node test/navigation-content.test.mjs",
     "test:r04": "node test/digikala-offer.test.mjs && node test/digikala-offer-source.test.mjs && node test/r04-card-layout.test.mjs",
-    "test:digikala-all-sources": "node test/digikala-verifier.test.mjs && node test/digikala-all-sources.test.mjs",
+    "test:digikala-all-sources": "node test/digikala-verifier.test.mjs && node test/digikala-all-sources.test.mjs && node test/digikala-affiliate-fallback.test.mjs && node test/digikala-affiliate-model.test.mjs",
     "build:release": "node scripts/build-extension.mjs release",
-    "test": "node test/deema-source.test.mjs && node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs && node test/piqo-api-client.test.mjs && node test/snappshop-source.test.mjs && node test/merchant-price.test.mjs && node test/digipay-merchant-price.test.mjs && node test/mouse-match.test.mjs && node test/air-fryer-match.test.mjs && node test/iphone-match.test.mjs && node test/r06-match.test.mjs && node test/model-less-match.test.mjs && node test/navigation-state.test.mjs && node test/navigation-panel.test.mjs && node test/sidebar-sort.test.mjs && node test/recent-history.test.mjs"
+    "test": "node test/deema-source.test.mjs && node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs && node test/piqo-api-client.test.mjs && node test/snappshop-source.test.mjs && node test/merchant-price.test.mjs && node test/digipay-merchant-price.test.mjs && node test/mouse-match.test.mjs && node test/air-fryer-match.test.mjs && node test/iphone-match.test.mjs && node test/r06-match.test.mjs && node test/model-less-match.test.mjs && node test/navigation-state.test.mjs && node test/navigation-panel.test.mjs && node test/sidebar-sort.test.mjs && node test/recent-history.test.mjs",
+    "test:monitoring": "node test/build-endpoints.test.mjs && node test/diagnostic-details.test.mjs && node test/diagnostics.test.mjs && node test/survey.test.mjs && node test/monitoring-integration.test.mjs",
+    "test:survey-ui": "node test/survey-ui.test.mjs",
+    "test:usage": "node test/usage.test.mjs",
+    "test:usage-ui": "node test/usage-ui.test.mjs"
   },
   "repository": {
     "type": "git",

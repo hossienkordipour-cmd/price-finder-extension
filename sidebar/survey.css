@@ -1,0 +1,15 @@
+#piqo-survey { margin:16px; padding:16px; border:1px solid #a1d9c7; border-radius:12px; background:#f4fbf8; color:#163d30; font:inherit; }
+#piqo-survey[hidden], #piqo-survey [hidden] { display:none; }
+#piqo-survey .survey-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+#piqo-survey h2 { font-size:15px; margin:0; }
+#piqo-survey button, #piqo-survey label { min-height:44px; cursor:pointer; }
+#piqo-survey button { border:1px solid #87bfaa; border-radius:8px; padding:8px 12px; background:white; color:#163d30; font:inherit; }
+#piqo-survey button[type=submit] { background:#126b4f; color:white; margin-top:8px; }
+#piqo-survey button:disabled { opacity:.6; cursor:wait; }
+#piqo-survey fieldset { display:flex; gap:24px; padding:8px 0; border:0; }
+#piqo-survey fieldset label { display:inline-flex; align-items:center; gap:8px; }
+#piqo-survey textarea { display:block; box-sizing:border-box; width:100%; resize:vertical; min-height:72px; border:1px solid #87bfaa; border-radius:8px; padding:8px; font:inherit; background:white; color:#163d30; }
+#piqo-survey small { display:block; font-size:12px; margin:8px 0; }
+#piqo-survey :focus-visible { outline:2px solid #126b4f; outline-offset:3px; }
+#piqo-survey [role=status] { font-size:13px; margin:8px 0 0; }
+#piqo-survey .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }

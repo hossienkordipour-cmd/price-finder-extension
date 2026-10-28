@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {classifyCategory,createUsageTracker} from '../usage.js';
+import {safeEvent} from '../diagnostics.js';
+for(const [name,expected] of [['گوشی موبایل سامسونگ A55','phone'],['لپ تاپ ایسوس','laptop'],['هدفون بی سیم','audio'],['قاب گوشی موبایل','unknown'],['نام مبهم','unknown'],['قهوه ساز برقی','kitchen'],['کیبورد برای لپتاپ','unknown']])assert.equal(classifyCategory({name}).category,expected,name);
+let time=Date.now(),store={},sent=[];
+const tracker=createUsageTracker({storage:{get:async k=>({[k]:structuredClone(store[k])}),set:async v=>Object.assign(store,structuredClone(v))},endpoint:'http://localhost',version:'1.1.0',now:()=>time,fetcher:async(_,o)=>{sent.push(JSON.parse(o.body));return {ok:true};}});
+const [a,b]=await Promise.all([tracker.touch(),tracker.touch()]);assert.equal(a,b);
+await Promise.all([tracker.active(),tracker.active()]);assert.equal(sent.length,1);
+time+=60000;await tracker.active();assert.equal(sent[1].session_id,a);
+time+=31*60000;assert.notEqual(await tracker.touch(),a);
+const event=safeEvent({event_name:'search_started',search_id:crypto.randomUUID(),session_id:a,...classifyCategory({name:'گوشی موبایل تست'}),name:'secret',query:'private'},'1.1.0');
+assert.equal(event.category,'phone');assert.equal('name' in event,false);assert.equal('query' in event,false);
+console.log('Usage: conservative categories, multi-tab session, throttled presence, idle rotation and private payload passed');

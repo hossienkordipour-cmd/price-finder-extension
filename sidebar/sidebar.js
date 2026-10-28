@@ -38,6 +38,9 @@ let currentProduct = null;
 let allResults = [];
 let currentTabId = null;
 let latestRequestId = 0;
+let diagnosticSearchId = null;
+let presentedCount = 0;
+let resultsVisibleInViewport = false;
 let guideViewOpen = false;
 const guideNavBtn = document.getElementById('guide-nav-btn');
 
@@ -67,6 +70,20 @@ const currentProductEl = document.getElementById("current-product");
 const resultsListEl = document.getElementById("results-list");
 const sortFilter = document.getElementById("sort-filter");
 const conditionFilter = document.getElementById("condition-filter");
+
+function acknowledgeResultsPresented() {
+  if (!presentedCount || !diagnosticSearchId || !resultsVisibleInViewport) return;
+  const renderedSearchId = diagnosticSearchId;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (document.visibilityState !== 'visible' || !resultsVisibleInViewport || guideViewOpen || renderedSearchId !== diagnosticSearchId) return;
+    chrome.runtime.sendMessage({ type: 'RESULTS_PRESENTED', tabId: currentTabId, searchId: renderedSearchId, count: presentedCount }).catch(() => {});
+  }));
+}
+new IntersectionObserver(entries => {
+  resultsVisibleInViewport = entries.some(entry => entry.isIntersecting && entry.intersectionRect.width > 0 && entry.intersectionRect.height > 0);
+  if (resultsVisibleInViewport) acknowledgeResultsPresented();
+}).observe(resultsListEl);
+document.addEventListener('visibilitychange', acknowledgeResultsPresented);
 
 let currentTabUrl = "";
 
@@ -350,6 +367,7 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "SEARCH_STARTED") {
+    diagnosticSearchId = message.searchId || null;
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = message.product || currentProduct;
     allResults = [];
@@ -357,11 +375,13 @@ chrome.runtime.onMessage.addListener((message) => {
   }
 
   if (message.type === "RESULTS_UPDATED") {
+    diagnosticSearchId = message.searchId || diagnosticSearchId;
     allResults = message.results || [];
     renderResults(allResults, message.isPartial);
+    if (!message.isPartial) window.piqoOfferSurvey?.();
   }
 
-  if (message.type === "SEARCH_ERROR") {
+  if (message.type === "SEARCH_ERROR" || message.type === "SEARCH_FAILED") {
     showError();
   }
 });
@@ -502,6 +522,11 @@ function renderResults(results, isLoading = false) {
   }
   
   resultsListEl.innerHTML = html;
+  // Two animation frames acknowledge actual visible rendering, not receipt.
+  if (typeof acknowledgeResultsPresented === 'function') {
+    presentedCount = filtered.length;
+    acknowledgeResultsPresented();
+  }
   
   const clearBtn = document.getElementById('btn-clear-filters');
   if (clearBtn) {
@@ -549,6 +574,7 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
   if (state?.requestId < latestRequestId) return;
   if (state && state.currentProduct) {
     latestRequestId = state.requestId || 0;
+    diagnosticSearchId = state.searchId || null;
     currentProduct = state.currentProduct;
     if (state.isLoading) {
       showLoading();
@@ -556,7 +582,7 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
         allResults = state.searchResults;
         renderResults(allResults, true);
       }
-    } else if (state.searchResults && state.searchResults.length > 0) {
+    } else if (Array.isArray(state.searchResults)) {
       allResults = state.searchResults;
       renderResults(allResults, false);
     } else {

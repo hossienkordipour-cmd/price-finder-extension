@@ -1,3 +1,7 @@
+import { createDiagnostics, createSearchTrace, uuid } from './diagnostics.js';
+import { createUsageTracker, classifyCategory } from './usage.js';
+import { diagnosticFetch } from './request-diagnostics.js';
+import { createSurvey } from './survey.js';
 import {
   assessProductMatch,
   buildSearchQuery,
@@ -19,8 +23,22 @@ import {
 } from './api-logger.js';
 import { SearchResultCache } from './search-cache.js';
 
-let globalAffilioPrefix = null; // Cache for universal dynamic affiliate links
-import { PIQO_API_BASE_URL, parsePiqoApiResponse, parsePiqoDivarResponse } from './piqo-api-client.js';
+import { PIQO_API_BASE_URL, PIQO_MONITORING_BASE_URL, parsePiqoApiResponse, parsePiqoDivarResponse } from './piqo-api-client.js';
+
+const diagnostics = typeof createDiagnostics === 'function' ? createDiagnostics({ storage: chrome.storage.local,
+  buildChannel: chrome.runtime.getManifest().version_name?.endsWith('-dev') ? 'dev' : 'release',
+  version: chrome.runtime.getManifest().version, endpoint: PIQO_MONITORING_BASE_URL + '/v1/diagnostics/events' }) : null;
+const survey = typeof createSurvey === 'function' ? createSurvey({ storage: chrome.storage.local,
+  version: chrome.runtime.getManifest().version, endpoint: PIQO_MONITORING_BASE_URL + '/v1/surveys' }) : null;
+const activeTraces = new Map();
+const usage = typeof createUsageTracker === 'function' && chrome.storage.session ? createUsageTracker({
+  storage:chrome.storage.session,version:chrome.runtime.getManifest().version,
+  buildChannel:chrome.runtime.getManifest().version_name?.endsWith('-dev')?'dev':'release',
+  endpoint:PIQO_MONITORING_BASE_URL+'/v1/usage/activity',
+}) : null;
+chrome.alarms?.create('piqo-diagnostics', { periodInMinutes: 1 });
+chrome.alarms?.onAlarm.addListener(alarm => { if (alarm.name === 'piqo-diagnostics') void diagnostics?.flush(); });
+void diagnostics?.flush();
 
 const PIQO_ONBOARDING_STATE_KEY = 'piqoOnboardingState';
 
@@ -108,6 +126,8 @@ function invalidateTabPage(tabId, url, force = false) {
     const current = (await chrome.storage.local.get([key]))[key];
     const pageKey = getPageKey(url);
     if (!force && pageKey === (current?.pageKey || getPageKey(current?.currentProduct?.navigationUrl || current?.currentProduct?.sourceUrl))) return;
+    activeTraces.get(tabId)?.finish(null, true);
+    activeTraces.delete(tabId);
     historyOpenPages.delete(tabId);
     const requestId = tabSearches.begin(tabId, current?.requestId);
     await persistTabState(tabId, { currentProduct: null, productKey: null, searchResults: null,
@@ -122,7 +142,7 @@ function persistTabState(tabId, state, preserveLatestProduct = false) {
     const stored = (await chrome.storage.local.get([key]))[key];
     if (stored?.requestId > state.requestId) return;
     const next = preserveLatestProduct && stored?.requestId === state.requestId && stored?.productKey === state.productKey
-      ? { ...state, currentProduct: stored.currentProduct }
+      ? { ...state, currentProduct: stored.currentProduct, firstPresented: stored.firstPresented || state.firstPresented }
       : state;
     await chrome.storage.local.set({ [key]: next });
   });
@@ -255,6 +275,8 @@ async function registerDetectedProduct(tabId, product) {
     return;
   }
 
+  activeTraces.get(tabId)?.finish(null, true);
+  activeTraces.delete(tabId);
   const requestId = tabSearches.begin(tabId, currentState?.requestId);
   await persistTabState(tabId, {
     currentProduct: product,
@@ -279,7 +301,16 @@ function startTabSearch(tabId, product, options = {}) {
   if (current?.productKey && current.productKey !== getProductKey(product)) return;
   const requestId = tabSearches.begin(tabId, current?.requestId);
 
+  const usageSession = await usage?.touch().catch(() => null);
+  const trace = typeof createSearchTrace === 'function' ? createSearchTrace(diagnostics, undefined, Date.now, {
+    ...(usageSession ? {session_id:usageSession}:{}),
+    ...(typeof classifyCategory === 'function' ? classifyCategory(product) : {}),
+  }) : null;
+  void usage?.active();
+  activeTraces.get(tabId)?.finish(null, true);
+  if (trace) activeTraces.set(tabId, trace);
   const loadingState = {
+    searchId: trace?.id, searchStartedAt: trace?.started, firstPresented: false,
     currentProduct: product,
     searchResults: null,
     isLoading: true,
@@ -290,21 +321,26 @@ function startTabSearch(tabId, product, options = {}) {
     updatedAt: Date.now(),
   };
   await persistTabState(tabId, loadingState);
-  broadcastTabUpdate("SEARCH_STARTED", tabId, { product, requestId });
+  broadcastTabUpdate("SEARCH_STARTED", tabId, { product, requestId, searchId: trace?.id });
 
   searchPrices(product, {
-    ...options,
+    ...options, trace,
     onProgress: (partialResults) => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       persistTabState(tabId, { ...loadingState, searchResults: partialResults }, true);
       attachHistoryAffiliateLinks(partialResults);
-      broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId, isPartial: true });
+      broadcastTabUpdate("RESULTS_UPDATED", tabId, { results: partialResults, requestId, searchId: trace?.id, isPartial: true });
     }
   })
     .then(results => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
+      trace?.finish(results.length);
+      activeTraces.delete(tabId);
+      void survey?.complete(trace?.id).catch(() => {});
+      void diagnostics?.flush();
       attachHistoryAffiliateLinks(results);
       return persistTabState(tabId, {
+        ...loadingState,
         currentProduct: product,
         searchResults: results,
         isLoading: false,
@@ -313,12 +349,16 @@ function startTabSearch(tabId, product, options = {}) {
         productKey: getProductKey(product),
         updatedAt: Date.now(),
         pageKey,
-      }, true).then(() => { if (tabSearches.isCurrent(tabId, requestId)) broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId, isPartial: false }); });
+      }, true).then(() => { if (tabSearches.isCurrent(tabId, requestId)) broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId, searchId: trace?.id, isPartial: false }); });
     })
     .catch(error => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
+      trace?.finish(null, false, true);
+      activeTraces.delete(tabId);
+      void diagnostics?.flush();
       const message = error?.message || "جستجو ناموفق بود";
       return persistTabState(tabId, {
+        ...loadingState,
         currentProduct: product,
         searchResults: null,
         isLoading: false,
@@ -333,6 +373,23 @@ function startTabSearch(tabId, product, options = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (['RESULTS_PRESENTED', 'SURVEY_CLAIM', 'SURVEY_SUBMIT', 'USAGE_ACTIVE'].includes(message.type)) {
+    // Only the packaged sidebar may submit diagnostics acknowledgements or surveys.
+    if (!sender.url?.startsWith(chrome.runtime.getURL('sidebar/sidebar.html'))) return false;
+    if (message.type === 'USAGE_ACTIVE') { void usage?.active(); sendResponse({success:true}); return false; }
+    if (message.type === 'SURVEY_CLAIM') { survey?.claim().then(id => sendResponse({ survey_id: id })).catch(() => sendResponse({})); return true; }
+    if (message.type === 'SURVEY_SUBMIT') { survey?.submit(message.payload || {}).then(sendResponse).catch(() => sendResponse({ success: false })); return true; }
+    runTabOperation(message.tabId, async () => {
+      const key = getTabStateKey(message.tabId);
+      const state = (await chrome.storage.local.get(key))[key];
+      if (!state?.searchId || state.searchId !== message.searchId || state.firstPresented || !state.searchResults?.length) return;
+      await persistTabState(message.tabId, { ...state, firstPresented: true });
+      void diagnostics?.emit({ event_name: 'results_presented', search_id: state.searchId,
+        displayed_count: Math.min(state.searchResults.length, Math.max(0, Number(message.count) || 0)),
+        first_result_ms: Math.max(0, Date.now() - state.searchStartedAt) });
+    }).then(() => sendResponse({ success: true })).catch(() => sendResponse({ success: false }));
+    return true;
+  }
   if (message.type === "PIQO_OPENED") {
     const tabId = sender.tab?.id;
     if (!Number.isInteger(tabId) || getPageKey(sender.tab?.url) !== getPageKey(message.url)) {
@@ -449,6 +506,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener(tabId => {
+  activeTraces.get(tabId)?.finish(null, true);
+  activeTraces.delete(tabId);
   tabSearches.clear(tabId);
   historyOpenPages.delete(tabId);
   chrome.storage.local.remove(getTabStateKey(tabId));
@@ -466,7 +525,8 @@ async function searchPrices(product, options = {}) {
       // Product default offers can change within our general search-cache TTL.
       // Refresh Digikala prices before displaying cached cards, keeping their
       // supplied affiliate links and the existing fallback on lookup failure.
-      const refreshDigikala = createDigikalaOfferVerifier(fetchWithTimeout, { refresh: true });
+      if (options.trace) options.trace.cache = 'client';
+      const refreshDigikala = createDigikalaOfferVerifier(options.trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, options.trace) : fetchWithTimeout, { refresh: true });
       const results = await Promise.all(cached.results.map(offer => refreshDigikala(offer)));
       logApiCache("cache-hit", cacheKey, results.length);
       if (options.onProgress) options.onProgress(results);
@@ -476,28 +536,32 @@ async function searchPrices(product, options = {}) {
 
   if (inFlightSearches.has(cacheKey)) {
     logApiCache("in-flight-hit", cacheKey);
-    const res = await inFlightSearches.get(cacheKey);
+    const shared = inFlightSearches.get(cacheKey);
+    options.trace?.link(shared.trace);
+    const res = await shared.promise;
+    if (options.trace && shared.trace) { options.trace.requests.push(...shared.trace.requests); options.trace.sources.push(...shared.trace.sources); }
     if (options.onProgress) options.onProgress(res);
     return res;
   }
 
-  const searchPromise = searchPricesFromStores(product, options.onProgress)
+  const searchPromise = searchPricesFromStores(product, options.onProgress, options.trace)
     .then(async results => {
       await searchCache.set(cacheKey, results);
       return results;
     })
     .finally(() => inFlightSearches.delete(cacheKey));
 
-  inFlightSearches.set(cacheKey, searchPromise);
+  inFlightSearches.set(cacheKey, { promise: searchPromise, trace: options.trace });
   return searchPromise;
 }
 
 
-async function searchMasterKala(query) {
+async function searchMasterKala(query, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const url = "https://masterkala.com/api/2.1.1.0.0/?route=product/searchproduct";
     const reqData = { "v": "1.2", "query": query, "from": 0, "limit": 12, "filter": "" };
-    const res = await fetchWithTimeout(url, {
+    const res = await monitoredFetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(reqData)
@@ -533,10 +597,11 @@ async function searchMasterKala(query) {
 }
 
 
-async function searchDigipay(query) {
+async function searchDigipay(query, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const url = `https://www.mydigipay.com/search/0?query=${encodeURIComponent(query)}`;
-    const res = await fetchWithTimeout(url, {
+    const res = await monitoredFetch(url, {
       method: "GET",
       headers: { "User-Agent": "Mozilla/5.0" }
     }, 10000);
@@ -584,7 +649,7 @@ async function searchDigipay(query) {
     let merchantChecks = 0;
     const verified = await Promise.all(results.map(offer => {
       if (needsMerchantPriceCheck(offer.url) && ++merchantChecks > 4) return null;
-      return verifyDigipayMerchantOffer(offer, fetchWithTimeout);
+      return verifyDigipayMerchantOffer(offer, monitoredFetch);
     }));
     return verified.filter(Boolean);
   } catch (e) {
@@ -592,7 +657,7 @@ async function searchDigipay(query) {
   }
 }
 
-async function searchPricesFromStores(product, onProgress) {
+async function searchPricesFromStores(product, onProgress, trace = null) {
   console.log("[قیمت‌یاب] جستجوی اولیه:", product.name);
   const searchName = buildSearchQuery(product.name);
   console.log("[قیمت‌یاب] عبارت جستجو:", searchName);
@@ -600,16 +665,29 @@ async function searchPricesFromStores(product, onProgress) {
   // Query Affilio with multiple variations to bypass its fragile search engine
   const rawPrefix = product.name.split(' ').slice(0, 6).join(' '); // First 6 words (broad search)
   const affilioPromise = Promise.allSettled([
-    searchPiqoApi(searchName), 
-    searchPiqoApi(product.name),
-    searchPiqoApi(rawPrefix)
-  ]).then(results => {
+    searchPiqoApi(searchName, trace),
+    searchPiqoApi(product.name, trace),
+    searchPiqoApi(rawPrefix, trace)
+  ]).then(async results => {
     const combined = [];
     results.forEach(res => {
       if (res.status === 'fulfilled' && res.value) {
         combined.push(...res.value);
       }
     });
+    // Feed search can miss a long title even when its exact model is indexed.
+    // Resolve missing same-product links independently of other merchants.
+    const shortPrefix = product.name.replace(/["'«»“”]/g, '').trim().split(/\s+/).slice(0, 3).join(' ');
+    const model = (product.name.match(/[A-Za-z0-9]+(?:[-_/][A-Za-z0-9]+)*/g) || [])
+      .find(token => token.length >= 4 && /[A-Za-z]/.test(token) && /\d/.test(token));
+    const fallbackQuery = model || shortPrefix;
+    const pageDkp = getDigikalaProductId(product);
+    const needsProductLink = pageDkp && !combined.some(offer => getDigikalaProductId(offer) === pageDkp);
+    if ((!combined.length || needsProductLink) && results.every(res => res.status === 'fulfilled')
+      && fallbackQuery && ![searchName, product.name, rawPrefix].includes(fallbackQuery)) {
+      try { combined.push(...await searchPiqoApi(fallbackQuery, trace)); }
+      catch { /* Direct-store results remain usable if fallback is unavailable. */ }
+    }
     // Deduplicate by URL to avoid huge arrays
     const unique = new Map();
     combined.forEach(item => { if (item.url) unique.set(item.url, item); });
@@ -617,8 +695,8 @@ async function searchPricesFromStores(product, onProgress) {
   });
 
   const tlPromise = Promise.allSettled([
-    searchTechnolife(searchName),
-    searchTechnolife(product.name)
+    searchTechnolife(searchName, trace),
+    searchTechnolife(product.name, trace)
   ]).then(results => {
     const combined = [];
     results.forEach(res => {
@@ -630,8 +708,8 @@ async function searchPricesFromStores(product, onProgress) {
   });
 
   const khPromise = Promise.allSettled([
-    searchKhanoumi(searchName),
-    searchKhanoumi(product.name)
+    searchKhanoumi(searchName, trace),
+    searchKhanoumi(product.name, trace)
   ]).then(results => {
     const combined = [];
     results.forEach(res => {
@@ -643,8 +721,8 @@ async function searchPricesFromStores(product, onProgress) {
   });
 
   const gsPromise = Promise.allSettled([
-    searchGooshishop(searchName),
-    searchGooshishop(product.name)
+    searchGooshishop(searchName, trace),
+    searchGooshishop(product.name, trace)
   ]).then(results => {
     const combined = [];
     results.forEach(res => {
@@ -656,23 +734,23 @@ async function searchPricesFromStores(product, onProgress) {
   });
 
   const promises = [
-    { name: "افیلیو", p: affilioPromise },
-    { name: "تکنولایف", p: tlPromise },
-    { name: "خانومی", p: khPromise },
-    { name: "گوشی شاپ", p: gsPromise },
-    { name: "دیجی‌کالا", p: searchDigikala(searchName) },
-    { name: "ترب", p: searchTorob(searchName) },
-    { name: "ایمالز", p: searchEmalls(searchName) },
-    { name: "باسلام", p: searchBasalam(searchName) },
-    { name: "دیوار", p: searchDivar(searchName) },
-    { name: "شیپور", p: searchSheypoor(searchName) },
-    { name: "مسترکالا", p: searchMasterKala(searchName) },
-    { name: "دیجی‌پی", p: searchDigipay(searchName) },
-    { name: "کالائوما", p: searchKalaoma(searchName) },
+    { name: "افیلیو", source: 'affilio', p: affilioPromise },
+    { name: "تکنولایف", source: 'technolife', p: tlPromise },
+    { name: "خانومی", source: 'khanoumi', p: khPromise },
+    { name: "گوشی شاپ", source: 'gooshishop', p: gsPromise },
+    { name: "دیجی‌کالا", source: 'digikala', p: searchDigikala(searchName, trace) },
+    { name: "ترب", source: 'torob', p: searchTorob(searchName, trace) },
+    { name: "ایمالز", source: 'emalls', p: searchEmalls(searchName, trace) },
+    { name: "باسلام", source: 'basalam', p: searchBasalam(searchName, trace) },
+    { name: "دیوار", source: 'divar', p: searchDivar(searchName, trace) },
+    { name: "شیپور", source: 'sheypoor', p: searchSheypoor(searchName, trace) },
+    { name: "مسترکالا", source: 'masterkala', p: searchMasterKala(searchName, trace) },
+    { name: "دیجی‌پی", source: 'digipay', p: searchDigipay(searchName, trace) },
+    { name: "کالائوما", source: 'kalaoma', p: searchKalaoma(searchName, trace) },
   ];
 
   const allValidResults = [];
-  const verifyDigikalaOffer = createDigikalaOfferVerifier(fetchWithTimeout);
+  const verifyDigikalaOffer = createDigikalaOfferVerifier(trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout);
 
   const filterAndScore = (r) => {
     if (r.availability === false) return null;
@@ -690,19 +768,11 @@ async function searchPricesFromStores(product, onProgress) {
       const dkp = getDigikalaProductId(offer);
       if (dkp) affiliateByDkp.set(dkp, { ...offer, url: offer.originalAffiliateUrl || offer.url });
     }
-    // 1. Extract and cache Affilio Token Prefix
+    // Normalize labels without deriving tracking URLs from another offer.
     results.forEach(item => {
       if (item.store === "دیجی کالا") item.store = "دیجی‌کالا";
       if (item.store === "اسنپ شاپ") item.store = "اسنپ‌شاپ";
       
-      if (item.source === "affilio" && item.url && item.url.includes("publisher.affilio.ir")) {
-        const pIndex = item.url.indexOf("&p=");
-        if (pIndex !== -1) {
-            let prefix = item.url.substring(0, pIndex);
-            prefix = prefix.replace(/&utm_term=[^&]*/, "");
-            globalAffilioPrefix = prefix; // Save globally for all future products!
-        }
-      }
     });
 
     const uniqueByKey = new Map();
@@ -736,13 +806,6 @@ async function searchPricesFromStores(product, onProgress) {
             
         }
 
-        // 3. UNIVERSAL AFFILIATE UPGRADE
-        if (globalAffilioPrefix && !item.isAffiliate && item.url && !item.url.includes("publisher.affilio.ir")) {
-            item.url = `${globalAffilioPrefix}&utm_term=${encodeURIComponent(item.name)}&p=${item.url}`;
-            item.isAffiliate = true;
-            item.source = "affilio"; // Preserve the source after upgrading to an affiliate link
-            item.isMerged = true; // Protect it from being dropped in subsequent renders
-        }
       }
 
       const dkp = item.store === 'دیجی‌کالا' ? getDigikalaProductId(item) : null;
@@ -763,11 +826,13 @@ async function searchPricesFromStores(product, onProgress) {
     req.p.then(async res => {
       logApiResults(req.name, res.length);
       const checked = await Promise.all(res.map(offer => verifyDigikalaOffer(offer, req.name)));
-      const valid = checked.map(filterAndScore).filter(Boolean);
+      const valid = checked.map(offer => filterAndScore({ ...offer, retrievalSource: req.source })).filter(Boolean);
+      trace?.source({ source: req.source, status: res.length ? 'success' : (trace.requests.some(r => r.source === req.source && !['success','empty'].includes(r.status)) ? 'failed' : ['emalls','digipay'].includes(req.source) ? 'parse_error' : 'empty'), result_count: res.length, accepted_count: valid.length, cache: 'network' });
       allValidResults.push(...valid);
       if (onProgress) onProgress(sortAndDedupe(allValidResults));
       return valid;
     }).catch(err => {
+      trace?.source({ source: req.source, status: 'failed', result_count: null, accepted_count: null, cache: 'network' });
       logApiResults(req.name, 0, { error: err.message });
       return [];
     })
@@ -777,9 +842,10 @@ async function searchPricesFromStores(product, onProgress) {
   return sortAndDedupe(allValidResults);
 }
 
-async function searchPiqoApi(productName) {
+async function searchPiqoApi(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   const url = `${PIQO_API_BASE_URL}/v1/search?q=${encodeURIComponent(productName)}`;
-  const response = await fetchWithTimeout(url, {
+  const response = await monitoredFetch(url, {
     timeout: 12000,
     logStore: "افیلیو",
     logOperation: "server-search",
@@ -808,12 +874,13 @@ function createDeemaLink(originalUrl) {
 // ==============================
 // خانومی (Khanoumi) — API مستقیم
 // ==============================
-async function searchKhanoumi(productName) {
+async function searchKhanoumi(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const query = encodeURIComponent(productName);
     const url = `https://www.khanoumi.com/api/ntl/v1/products?query=${query}`;
     const context = beginApiRequest({ store: "خانومی", url, method: "GET", operation: "api-search" });
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       timeout: 10000,
       logStore: "خانومی",
       headers: { "Accept": "application/json" }
@@ -865,12 +932,13 @@ async function searchKhanoumi(productName) {
 // ==============================
 // تکنولایف (Technolife) — SSR Data
 // ==============================
-async function searchTechnolife(productName) {
+async function searchTechnolife(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const query = encodeURIComponent(productName);
     const url = `https://www.technolife.com/product/list/search?keywords=${query}`;
     const context = beginApiRequest({ store: "تکنولایف", url, method: "GET", operation: "next-data" });
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       timeout: 12000,
       logStore: "تکنولایف",
       headers: {
@@ -931,13 +999,14 @@ async function searchTechnolife(productName) {
 // ==============================
 // گوشی شاپ (Gooshi Shop) — API مستقیم
 // ==============================
-async function searchGooshishop(productName) {
+async function searchGooshishop(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const query = encodeURIComponent(productName);
     const searchPath = encodeURIComponent(`/search?q=${productName}`);
     const url = `https://gooshishop.com/api-frontend/search/search?url=${searchPath}`;
     const context = beginApiRequest({ store: "گوشی شاپ", url, method: "GET", operation: "api-search" });
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       timeout: 10000,
       logStore: "گوشی شاپ",
       headers: {
@@ -1006,9 +1075,10 @@ async function searchGooshishop(productName) {
 // ==============================
 // دیجی‌کالا — API رسمی (قیمت ریال)
 // ==============================
-async function searchDigikala(productName) {
+async function searchDigikala(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   const query = encodeURIComponent(productName);
-  const response = await fetchWithTimeout(`https://api.digikala.com/v1/search/?q=${query}&page=1`, {
+  const response = await monitoredFetch(`https://api.digikala.com/v1/search/?q=${query}&page=1`, {
     logStore: "دیجی‌کالا",
     credentials: "include",
     headers: { "Accept": "application/json" }
@@ -1038,7 +1108,7 @@ async function searchDigikala(productName) {
       availability: v?.status === "marketable",
     };
     try {
-      const detail = await fetchWithTimeout(`https://api.digikala.com/v2/product/${item.id}/`, {
+      const detail = await monitoredFetch(`https://api.digikala.com/v2/product/${item.id}/`, {
         timeout: 5000, logStore: 'دیجی‌کالا', logOperation: 'verify-offer',
         credentials: 'include', headers: { Accept: 'application/json' },
       });
@@ -1052,12 +1122,13 @@ async function searchDigikala(productName) {
 // ==============================
 // ترب — api.torob.com (endpoint واقعی)
 // ==============================
-async function searchTorob(productName) {
+async function searchTorob(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   const query = encodeURIComponent(productName);
   // endpoint واقعی که از HTML سایت پیدا کردیم
   const url = `https://api.torob.com/v4/base-product/search/?q=${query}&source=next_desktop`;
 
-  const response = await fetchWithTimeout(url, {
+  const response = await monitoredFetch(url, {
     logStore: "ترب",
     headers: {
       "Accept": "application/json",
@@ -1096,11 +1167,12 @@ async function searchTorob(productName) {
 // ==============================
 // ایمالز — HTML scraping
 // ==============================
-async function searchEmalls(productName) {
+async function searchEmalls(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   const query = encodeURIComponent(productName);
   try {
     const url = `https://emalls.ir/لیست-قیمت/?Search=${query}`;
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       logStore: "ایمالز",
       headers: {
         "Accept": "text/html",
@@ -1157,7 +1229,8 @@ async function searchEmalls(productName) {
 // ==============================
 // باسلام — API
 // ==============================
-async function searchBasalam(productName) {
+async function searchBasalam(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   const query = encodeURIComponent(productName);
   const endpoints = [
     `https://search.basalam.com/ai-engine/api/v2.0/product/search?q=${query}&limit=6`,
@@ -1166,7 +1239,7 @@ async function searchBasalam(productName) {
 
   for (const url of endpoints) {
     try {
-      const response = await fetchWithTimeout(url, {
+      const response = await monitoredFetch(url, {
         logStore: "باسلام",
         headers: {
           "Accept": "application/json"
@@ -1205,10 +1278,11 @@ async function searchBasalam(productName) {
 // ==============================
 // دیوار — از طریق API پیکو و Divar MCP
 // ==============================
-async function searchDivar(productName) {
+async function searchDivar(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const url = `${PIQO_API_BASE_URL}/v1/divar/search?q=${encodeURIComponent(productName)}`;
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       logStore: "دیوار",
       timeout: 10000, // Backend pagination has an eight-second total budget.
       headers: {
@@ -1226,12 +1300,13 @@ async function searchDivar(productName) {
 // ==============================
 // شیپور — API
 // ==============================
-async function searchSheypoor(productName) {
+async function searchSheypoor(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const query = encodeURIComponent(productName);
     const url = `https://www.sheypoor.com/api/v10.0.0/search?q=${query}`;
     
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       logStore: "شیپور",
       credentials: "omit",
       headers: { "Accept": "application/json" }
@@ -1425,11 +1500,12 @@ function parseSnappShopItems(items, productName) {
 // ==============================
 // کالائوما (Kalaoma)
 // ==============================
-async function searchKalaoma(productName) {
+async function searchKalaoma(productName, trace = null) {
+  const monitoredFetch = trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout;
   try {
     const query = encodeURIComponent(productName);
     const url = `https://kalaoma.com/wp-json/wc/store/products?search=${query}`;
-    const response = await fetchWithTimeout(url, {
+    const response = await monitoredFetch(url, {
       logStore: "کالائوما",
       headers: { "Accept": "application/json" }
     });
