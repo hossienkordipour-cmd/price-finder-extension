@@ -29,7 +29,9 @@
     "test:monitoring": "node test/build-endpoints.test.mjs && node test/diagnostic-details.test.mjs && node test/diagnostics.test.mjs && node test/survey.test.mjs && node test/monitoring-integration.test.mjs",
     "test:survey-ui": "node test/survey-ui.test.mjs",
     "test:usage": "node test/usage.test.mjs",
-    "test:usage-ui": "node test/usage-ui.test.mjs"
+    "test:usage-ui": "node test/usage-ui.test.mjs",
+    "build:dev:online": "node scripts/build-extension.mjs dev --monitoring=production",
+    "test:price-reports": "node test/missing-price.test.mjs"
   },
   "repository": {
     "type": "git",

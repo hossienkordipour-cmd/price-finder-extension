@@ -8,6 +8,7 @@ const product={name:'private product',source:'manual'};
 const storage={},events=[],wire=[],completed=[],pending=[];
 const area={async get(keys){return Object.fromEntries((Array.isArray(keys)?keys:[keys]).map(k=>[k,structuredClone(storage[k])]))},async set(v){Object.assign(storage,structuredClone(v));},async remove(){}};
 const ctx=vm.createContext({console,Date,URL,setTimeout,clearTimeout,AbortController,...stateTools,createSearchTrace,normalizeProductText:v=>v,
+ createPriceReporter:()=>({flush:async()=>{},enqueue:async()=>({queued:true})}),
  createDiagnostics:()=>({emit:e=>{wire.push(e);return Promise.resolve();},flush:async()=>{}}),
  createSurvey:()=>({complete:async id=>completed.push(id)}),SearchResultCache:class{},PIQO_API_BASE_URL:'https://api.piqoo.ir',PIQO_MONITORING_BASE_URL:'http://127.0.0.1:3000',chrome:{
  runtime:{getManifest:()=>({version:'1.1.0'}),onInstalled:{addListener(){}},onMessage:{addListener(){}},sendMessage:m=>{events.push(m);return Promise.resolve();}},action:{onClicked:{addListener(){}}},

@@ -6,6 +6,8 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(scriptDirectory, "..");
 const distRoot = path.join(projectRoot, "dist");
 const buildMode = process.argv[2];
+const onlineMonitoring=process.argv[3]==='--monitoring=production';
+if(process.argv.length>4 || (process.argv[3] && (!onlineMonitoring || buildMode!=='dev'))) throw new Error('Invalid monitoring option');
 
 if (buildMode !== "dev" && buildMode !== "release") {
   throw new Error(`Unsupported build mode: ${buildMode || "missing"}`);
@@ -30,6 +32,7 @@ const runtimePaths = [
   "tab-state.js",
   "api-logger.js",
   "diagnostics.js",
+  "missing-price.js",
   "request-diagnostics.js",
   "survey.js",
   "usage.js",
@@ -53,6 +56,7 @@ const outputManifestPath = path.join(outputDirectory, "manifest.json");
 const manifest = JSON.parse(await readFile(outputManifestPath, "utf8"));
 
 if (buildMode === "dev") {
+  if (!onlineMonitoring) {
   // Only diagnostics/surveys are local. Search requires the configured PIQO API.
   const clientPath = path.join(outputDirectory, 'piqo-api-client.js');
   await writeFile(clientPath, (await readFile(clientPath, 'utf8')).replace(
@@ -60,12 +64,13 @@ if (buildMode === "dev") {
     'export const PIQO_MONITORING_BASE_URL = "http://127.0.0.1:3000";',
   ));
   manifest.host_permissions.push('http://127.0.0.1:3000/*');
-  manifest.name = "پیکو | PIQO DEV — مقایسه قیمت";
-  manifest.short_name = "PIQO DEV";
+  }
+  manifest.name = onlineMonitoring?"پیکو | PIQO DEV ONLINE — مقایسه قیمت":"پیکو | PIQO DEV — مقایسه قیمت";
+  manifest.short_name = onlineMonitoring?"PIQO DEV ONLINE":"PIQO DEV";
   manifest.version_name = `${manifest.version}-dev`;
   manifest.action = {
     ...manifest.action,
-    default_title: "PIQO DEV",
+    default_title: onlineMonitoring?"PIQO DEV ONLINE":"PIQO DEV",
   };
 }
 

@@ -160,6 +160,33 @@
     return name.length > 2 ? name : null;
   }
 
+  let lastReportProduct = null;
+  function priceReportSnapshot() {
+    detectProduct();
+    if (!lastReportProduct) return null;
+    // Only current-product evidence; never inspect the sidebar's result cards.
+    let unavailable = false;
+    const title = document.querySelector('h1')?.textContent || '';
+    if (/^(?:ناموجود|توقف تولید)/.test(title.trim())) unavailable = true;
+    for (const marker of document.querySelectorAll('[data-testid="product-unavailable"], [data-cro="pdp-unavailable"], button')) {
+      if (marker.getClientRects().length && /^(?:ناموجود|موجود شد خبرم کن|موجود شد خبرم کنید)$/.test((marker.textContent || '').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim())) unavailable = true;
+    }
+    for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
+      try {
+        const value=JSON.parse(script.textContent),items=Array.isArray(value)?value:[value];
+        for(const item of items){if(item['@type']!=='Product')continue;
+          if(item.name && !lastReportProduct.name.includes(String(item.name).slice(0,12)) && !String(item.name).includes(lastReportProduct.name.slice(0,12)))continue;
+          const offers=Array.isArray(item.offers)?item.offers:[item.offers];
+          if(offers.length && offers.every(o=>o && /(?:OutOfStock|Discontinued)$/.test(String(o.availability)))) unavailable=true;
+        }
+      } catch {}
+    }
+    return {product:lastReportProduct,unavailable,loading:!!document.querySelector('main[aria-busy="true"], [data-testid="product-loading"], [data-cro="pdp-loading"]')};
+  }
+  const priceReportObserver=globalThis.PiqoPriceReportDetection?.createDetector({read:priceReportSnapshot,
+    send:product=>chrome.runtime.sendMessage({type:'MISSING_PRICE_REPORT',product:{name:product.name,sourceUrl:product.sourceUrl,source:product.source,price:product.price}})});
+  globalThis.PiqoPriceReportObserver=priceReportObserver;
+
   let lastUrl = location.href;
   let lastDetectedKey = null;
   let detectionTimer = null;
@@ -174,6 +201,9 @@
   function checkNavigation() {
     if (location.href === lastUrl) return false;
     lastUrl = location.href;
+    lastReportProduct = null;
+    priceReportObserver?.navigate();
+    priceReportObserver?.close();
     clearTimeout(metadataTimer);
     lastDetectedKey = null;
     clearedPageUrl = null;
@@ -204,6 +234,7 @@
     window.addEventListener('hashchange', checkNavigation);
     // pushState need not change the DOM; observe URLs without overriding sites' APIs.
     setInterval(checkNavigation, 250);
+    setInterval(()=>void priceReportObserver?.check(),1000);
     scheduleDetection();
   }
 
@@ -269,6 +300,7 @@ let detectionInterval = null;
     }
 
 if (product && product.name) {
+      lastReportProduct = product;
       clearedPageUrl = null;
       product.navigationUrl = removeTrackingFromUrl(new URL(location.href)).toString();
       product.sourceUrl = getPrivacySafePageUrl();
@@ -284,6 +316,7 @@ if (product && product.name) {
         injectFloatingButton();
       }
     } else {
+      lastReportProduct = null;
       if (lastDetectedKey && clearedPageUrl !== location.href) {
         clearedPageUrl = location.href;
         chrome.runtime.sendMessage({ type: 'PRODUCT_CLEARED', url: removeTrackingFromUrl(new URL(location.href)).toString() });
@@ -862,6 +895,7 @@ function togglePiqoPopup(isLeft) {
     };
     panelFrame.piqoSyncLayout = syncLayout;
     panelFrame.piqoClose = () => {
+      globalThis.PiqoPriceReportObserver?.close();
       panelFrame.style.opacity = '0';
       panelFrame.style.transform = panelFrame.piqoMobile ? 'translateY(100%)' : (panelFrame.piqoIsLeft ? 'translateX(-40px)' : 'translateX(40px)');
       backdrop.style.display = 'none'; unlockPage();
@@ -922,6 +956,7 @@ function togglePiqoPopup(isLeft) {
   // Toggle
   if (popup.style.display === 'none' || popup.style.opacity === '0') {
     chrome.runtime.sendMessage({ type: 'PIQO_OPENED', url: location.href }).catch(() => {});
+    globalThis.PiqoPriceReportObserver?.open();
     // Prep animation
     popup.style.transform = slideStart;
     popup.style.display = 'block';

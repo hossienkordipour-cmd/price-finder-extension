@@ -1,3 +1,4 @@
+import {createPriceReporter,normalizeReportUrl} from './missing-price.js';
 import { createDiagnostics, createSearchTrace, uuid } from './diagnostics.js';
 import { createUsageTracker, classifyCategory } from './usage.js';
 import { diagnosticFetch } from './request-diagnostics.js';
@@ -30,6 +31,7 @@ const diagnostics = typeof createDiagnostics === 'function' ? createDiagnostics(
   version: chrome.runtime.getManifest().version, endpoint: PIQO_MONITORING_BASE_URL + '/v1/diagnostics/events' }) : null;
 const survey = typeof createSurvey === 'function' ? createSurvey({ storage: chrome.storage.local,
   version: chrome.runtime.getManifest().version, endpoint: PIQO_MONITORING_BASE_URL + '/v1/surveys' }) : null;
+const priceReporter=typeof createPriceReporter==='function'?createPriceReporter({storage:chrome.storage.local,version:chrome.runtime.getManifest().version,buildChannel:chrome.runtime.getManifest().version_name?.endsWith('-dev')?'dev':'release',endpoint:PIQO_MONITORING_BASE_URL+'/v1/price-reports'}):null;
 const activeTraces = new Map();
 const usage = typeof createUsageTracker === 'function' && chrome.storage.session ? createUsageTracker({
   storage:chrome.storage.session,version:chrome.runtime.getManifest().version,
@@ -37,8 +39,9 @@ const usage = typeof createUsageTracker === 'function' && chrome.storage.session
   endpoint:PIQO_MONITORING_BASE_URL+'/v1/usage/activity',
 }) : null;
 chrome.alarms?.create('piqo-diagnostics', { periodInMinutes: 1 });
-chrome.alarms?.onAlarm.addListener(alarm => { if (alarm.name === 'piqo-diagnostics') void diagnostics?.flush(); });
+chrome.alarms?.onAlarm.addListener(alarm => { if (alarm.name === 'piqo-diagnostics') { void diagnostics?.flush(); void priceReporter?.flush(); } });
 void diagnostics?.flush();
+void priceReporter?.flush();
 
 const PIQO_ONBOARDING_STATE_KEY = 'piqoOnboardingState';
 
@@ -373,6 +376,13 @@ function startTabSearch(tabId, product, options = {}) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if(message.type==='MISSING_PRICE_REPORT'){
+    // Only the top-level content script on the current matching merchant page.
+    const current=normalizeReportUrl(sender.url,message.product?.source),requested=normalizeReportUrl(message.product?.sourceUrl,message.product?.source);
+    if(!priceReporter||sender.frameId!==0||!Number.isInteger(sender.tab?.id)||!current||current!==requested){sendResponse({queued:false});return false;}
+    priceReporter.enqueue(message.product).then(result=>{sendResponse(result);if(result.queued)void priceReporter?.flush();}).catch(()=>sendResponse({queued:false}));return true;
+  }
+
   if (['RESULTS_PRESENTED', 'SURVEY_CLAIM', 'SURVEY_SUBMIT', 'USAGE_ACTIVE'].includes(message.type)) {
     // Only the packaged sidebar may submit diagnostics acknowledgements or surveys.
     if (!sender.url?.startsWith(chrome.runtime.getURL('sidebar/sidebar.html'))) return false;

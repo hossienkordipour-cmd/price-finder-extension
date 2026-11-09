@@ -1008,3 +1008,5 @@ body.mobile-sheet.guide-page #popup-close-btn{grid-column:1;grid-row:2}
 body.mobile-sheet .filters-group{min-width:0;gap:6px}
 body.mobile-sheet .dropdown-header{font-size:11px}
 @media(prefers-reduced-motion:reduce){body.mobile-sheet *,body.mobile-sheet *::before,body.mobile-sheet *::after{animation:none!important;transition:none!important}}
+
+.price-report-note {font-size:11px;font-weight:400;line-height:1.8;color:#666;margin:6px 0;white-space:normal;}

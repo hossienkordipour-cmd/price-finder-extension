@@ -400,6 +400,7 @@ function generateCardHtml(item, isBase = false) {
     }
   }
 
+  const reportNotice=isBase && !(Number(item.price)>0) && ['digikala','technolife','khanoumi','gooshishop','etkala','basalam','masterkala','digipay','kalaoma'].includes(item.source)?'<p class="price-report-note">اگر قیمت خوانده نشود، نام و لینک عمومی همین محصول برای بررسی فنی به پیکو ارسال می‌شود.</p>':'';
   const storeText = item.condition === "used" ? `${item.store} - کارکرده` : item.store;
 
   const tag = isBase ? 'div' : 'a';
@@ -416,6 +417,7 @@ function generateCardHtml(item, isBase = false) {
         <div class="card-store-row">
           <div class="card-store">${isBase ? item.store : storeText}</div>
         </div>
+        ${reportNotice}
         ${item.price && item.price > 0 ? `
         <div class="card-bottom">
           <div class="card-price">${formatPrice(item.price)}<span>تومان</span></div>
