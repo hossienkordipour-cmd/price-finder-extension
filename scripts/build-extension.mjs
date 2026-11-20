@@ -33,6 +33,8 @@ const runtimePaths = [
   "api-logger.js",
   "diagnostics.js",
   "missing-price.js",
+  "price-observations.js",
+  "result-reports.js",
   "request-diagnostics.js",
   "survey.js",
   "usage.js",

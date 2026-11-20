@@ -26,12 +26,13 @@
     "test:digikala-all-sources": "node test/digikala-verifier.test.mjs && node test/digikala-all-sources.test.mjs && node test/digikala-affiliate-fallback.test.mjs && node test/digikala-affiliate-model.test.mjs",
     "build:release": "node scripts/build-extension.mjs release",
     "test": "node test/deema-source.test.mjs && node test/price-utils.test.mjs && node test/filters.test.mjs && node test/tab-state.test.mjs && node test/api-logger.test.mjs && node test/search-cache.test.mjs && node test/piqo-api-client.test.mjs && node test/snappshop-source.test.mjs && node test/merchant-price.test.mjs && node test/digipay-merchant-price.test.mjs && node test/mouse-match.test.mjs && node test/air-fryer-match.test.mjs && node test/iphone-match.test.mjs && node test/r06-match.test.mjs && node test/model-less-match.test.mjs && node test/navigation-state.test.mjs && node test/navigation-panel.test.mjs && node test/sidebar-sort.test.mjs && node test/recent-history.test.mjs",
-    "test:monitoring": "node test/build-endpoints.test.mjs && node test/diagnostic-details.test.mjs && node test/diagnostics.test.mjs && node test/survey.test.mjs && node test/monitoring-integration.test.mjs",
+    "test:result-reports": "node --test test/result-reports.test.mjs",
+    "test:monitoring": "node test/build-endpoints.test.mjs && node test/diagnostic-details.test.mjs && node test/diagnostics.test.mjs && node test/survey.test.mjs && node test/monitoring-integration.test.mjs && npm run test:result-reports",
     "test:survey-ui": "node test/survey-ui.test.mjs",
     "test:usage": "node test/usage.test.mjs",
     "test:usage-ui": "node test/usage-ui.test.mjs",
     "build:dev:online": "node scripts/build-extension.mjs dev --monitoring=production",
-    "test:price-reports": "node test/missing-price.test.mjs"
+    "test:price-reports": "node test/missing-price.test.mjs && node --test test/price-observations.test.mjs test/price-report-integration.test.mjs"
   },
   "repository": {
     "type": "git",

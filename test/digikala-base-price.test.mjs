@@ -116,10 +116,12 @@ try {
     }}};
   });
   await panel.addScriptTag({content:panelScript});
-  assert.ok((await panel.$eval('#current-product',el=>el.textContent)).includes('قیمت نامشخص'));
+  assert.equal(await panel.$('#current-product .card-price'), null);
+  assert.equal(await panel.$eval('#current-product .card-title',el=>el.textContent),'R50i');
   await panel.evaluate(()=>window.onPiqoMessage({type:'PRODUCT_METADATA_UPDATED',tabId:1,requestId:1,product:{name:'R50i',store:'دیجی‌کالا',price:3003100}}));
   assert.ok((await panel.$eval('#current-product',el=>el.textContent)).includes((3003100).toLocaleString('fa-IR')));
   await panel.evaluate(()=>window.onPiqoMessage({type:'PRODUCT_METADATA_UPDATED',tabId:1,requestId:1,product:{name:'R50i',store:'دیجی‌کالا',price:null}}));
-  assert.ok((await panel.$eval('#current-product',el=>el.textContent)).includes('قیمت نامشخص'));
-  console.log('PASS: panel reflects updated and unknown base price');
+  assert.equal(await panel.$('#current-product .card-price'), null);
+  assert.equal(await panel.$eval('#current-product .card-title',el=>el.textContent),'R50i');
+  console.log('PASS: panel shows the updated price and hides only the price row when unavailable');
 } finally { await browser.close(); }

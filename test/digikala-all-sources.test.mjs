@@ -7,7 +7,7 @@ const source = readFileSync(new URL('../background.js', import.meta.url), 'utf8'
 const name = 'کیبورد گیمینگ هیسکا مدل HX-KEG460';
 const url = 'https://www.digikala.com/product/dkp-21372366/';
 const signed = 'https://publisher.affilio.ir/click?utm_signature=original&p=' + url;
-const context = { console: { log() {} }, globalAffilioPrefix: null, assessProductMatch, buildSearchQuery, isPriceValid, normalizeProductText, logApiResults() {},
+const context = {URL,  console: { log() {} }, globalAffilioPrefix: null, assessProductMatch, buildSearchQuery, isPriceValid, normalizeProductText, logApiResults() {},
   createDigikalaOfferVerifier, getDigikalaProductId,
   searchPiqoApi: async () => [{ name, store: 'دیجی کالا', price: 19668000, url: signed, sourceUrl: url, source: 'affilio', availability: true, isAffiliate: true }],
   searchDigipay: async () => [{ name, store: 'دیجی‌کالا', price: 17790000, url, availability: true }, { name, store: 'اسنپ‌شاپ', price: 19490000, url: 'https://snappshop.ir/product/snp-982944724', availability: true }],

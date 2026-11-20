@@ -9,7 +9,7 @@ const signed='https://publisher.affilio.ir/click?utm_signature=exact-fixture&p='
 const calls=[];
 let unrelated=false,missing=false;
 const other={name,store:'باسلام',price:4150000,url:'https://basalam.com/product/123',source:'affilio',isAffiliate:true,availability:true};
-const ctx={console:{log(){}},globalAffilioPrefix:null,assessProductMatch,buildSearchQuery,isPriceValid,normalizeProductText,
+const ctx={URL, console:{log(){}},globalAffilioPrefix:null,assessProductMatch,buildSearchQuery,isPriceValid,normalizeProductText,
 createDigikalaOfferVerifier,getDigikalaProductId,logApiResults(){},
 searchPiqoApi:async q=>{calls.push(q);if(q==='H-MK25'&&!missing)return [{name,store:'دیجی کالا',price:4499000,url:signed,sourceUrl:url,source:'affilio',isAffiliate:true,availability:true}];return unrelated?[{...other}]:[];},
 fetchWithTimeout:async()=>({ok:true,json:async()=>({data:{product:{id:22109767,title_fa:name,status:'marketable',default_variant:{id:456,status:'marketable',price:{selling_price:44990000}}}}})}),};

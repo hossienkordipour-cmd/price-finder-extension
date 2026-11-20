@@ -9,7 +9,7 @@ const name='قرص ویتامین "D3" یوروویتال مدل 1000 واحدی
 const url='https://www.digikala.com/product/dkp-7158804/';
 const signed='https://publisher.affilio.ir/click?utm_signature=fixture&p='+url;
 const calls=[];
-const context={console:{log(){}},globalAffilioPrefix:null,assessProductMatch,buildSearchQuery,isPriceValid,normalizeProductText,
+const context={URL, console:{log(){}},globalAffilioPrefix:null,assessProductMatch,buildSearchQuery,isPriceValid,normalizeProductText,
  createDigikalaOfferVerifier,getDigikalaProductId,logApiResults(){},
  searchPiqoApi:async q=>{calls.push(q);return q==='قرص ویتامین D3'?[{name:'قرص ویتامین D3-1000 واحدی بسته 60 عددی',store:'دیجی کالا',price:160000,url:signed,sourceUrl:url,source:'affilio',isAffiliate:true,availability:true}]:[];},
  fetchWithTimeout:async()=>({ok:true,json:async()=>({data:{product:{id:7158804,title_fa:name,status:'marketable',default_variant:{id:123,status:'marketable',price:{selling_price:1600000}}}}})}),

@@ -31,15 +31,13 @@
   <div id="current-product" class="hidden"></div>
 
   <!-- Loading -->
-  <div id="loading-state" class="state-container hidden">
-    <div class="loading-view">
-      <div class="loading-dots">
-        <span></span>
-        <span></span>
-        <span></span>
-      </div>
-      <div class="loading-title">در حال جستجو...</div>
-    </div>
+  <div id="loading-state" class="state-container hidden" role="status">
+    <picture>
+      <source media="(prefers-reduced-motion: reduce)" srcset="assets/search-stores-still.webp" />
+      <img class="search-loading-art" src="assets/search-stores.webp" width="282" height="115" alt="" />
+    </picture>
+    <p class="search-loading-title">در حال جست‌وجو در فروشگاه‌ها…</p>
+    <p class="search-loading-description">به‌محض اینکه اولین قیمت رو پیدا کنیم، همین‌جا نشونت می‌دیم.</p>
   </div>
 
   <!-- Guide / Default State (When no product is active) -->
@@ -162,5 +160,6 @@
   </section>
   <script src="survey-ui.js"></script>
   <script src="sidebar.js"></script>
+  <script src="price-monitor.js"></script>
 </body>
 </html>

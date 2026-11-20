@@ -1,0 +1,31 @@
+<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><title>آزمون شواهد قیمت پیکو</title>
+<style>body{font:16px system-ui;padding:24px}#fixture{padding:20px;border:1px solid #ddd;margin:20px}li{margin:10px}button{padding:12px}</style>
+<h1>آزمون مرورگری تشخیص قیمت</h1><p>داده‌ها ساختگی‌اند و به سرور اصلی ارسال نمی‌شوند.</p><ol id="results"></ol><main id="fixture"></main><p id="status" role="status">در حال اجرا…</p>
+<script src="/extension/content/price-evidence.js"></script>
+<script type="module">
+import {classifyPriceObservation} from '/extension/price-observations.js';
+const fixture=document.getElementById('fixture'),results=document.getElementById('results');
+let failures=0;
+const product={name:'کالای تست',source:'unknown',price:null};
+const schema=(availability='InStock',name='کالای تست')=>`<script type="application/ld+json">${JSON.stringify({'@type':'Product',name,offers:{price:1200000,priceCurrency:'IRR',availability:'https://schema.org/'+availability}})}<\/script>`;
+async function check(label,html,expected,price=null,displayed=null,source='unknown'){
+ fixture.innerHTML=html;await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ const p={...product,price,source},evidence=piqoPriceEvidence.probe(p);
+ const actual=evidence.excluded?'excluded':classifyPriceObservation({...evidence,product:p},displayed);
+ const li=document.createElement('li');li.textContent=`${actual===expected?'PASS':'FAIL'} — ${label} (${actual})`;results.append(li);
+ if(actual!==expected)failures++;
+}
+await check('قیمت موجود و خطای استخراج',schema()+'<div class="product-price">۱۲۰٬۰۰۰ تومان</div>','extraction_missing');
+await check('قیمت استخراج‌شده ولی نمایش نامشخص',schema()+'<div class="product-price">۱۲۰٬۰۰۰ تومان</div>','display_missing',120000);
+await check('نمایش موفق',schema()+'<div class="product-price">۱۲۰٬۰۰۰ تومان</div>','success',120000,120000);
+await check('کالای ناموجود',schema('OutOfStock')+'<div class="product-price">۱۲۰٬۰۰۰ تومان</div>','excluded');
+await check('قیمت بدون شواهد موجودی',schema('')+'<div class="product-price">۱۲۰٬۰۰۰ تومان</div>','unknown');
+await check('قیمت محصول پیشنهادی',schema()+'<div class="recommendations"><div class="product-price">۱۲۰٬۰۰۰ تومان</div></div>','unknown');
+await check('قیمت قدیمی خط‌خورده',schema()+'<del><span class="product-price">۱۲۰٬۰۰۰ تومان</span></del>','unknown');
+await check('قیمت مخفی',schema()+'<div style="display:none"><span class="product-price">۱۲۰٬۰۰۰ تومان</span></div>','unknown');
+await check('دادهٔ ساختاریافتهٔ محصول دیگر',schema('InStock','محصول دیگر')+'<div class="product-price">۱۲۰٬۰۰۰ تومان</div>','unknown');
+await check('صفحهٔ بدون قیمت',schema()+'<h2>کالای تست</h2>','unknown');
+await check('قیمت انتخاب‌شدهٔ دیجی‌کالا',`<section><h2>کالای تست</h2><div><div data-testid="price-final">۱۲۰٬۰۰۰</div><button data-cro-id="pdp-add-to-cart">افزودن به سبد</button></div></section>`,'extraction_missing',null,null,'digikala');
+await check('قیمت فروشندهٔ دیگر',`<section><div><dds-price-group></dds-price-group><button data-cro-id="pdp-add-to-cart">افزودن</button></div><div data-testid="price-final">۱۲۰٬۰۰۰</div></section>`,'unknown',null,null,'digikala');
+document.getElementById('status').textContent=failures?`${failures} آزمون ناموفق`:'همهٔ ۱۲ آزمون پاس شدند';
+</script></html>

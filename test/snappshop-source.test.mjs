@@ -17,7 +17,7 @@ const offers = parsePiqoApiResponse({ results: links.map((url, index) => ({
   name, store: index ? 'اسنپ‌شاپ' : 'اسنپ شاپ',
   price: 2_000_000 + index * 100_000, url, availability: true,
 })) });
-const context = {
+const context = {URL, 
   createDigikalaOfferVerifier, getDigikalaProductId,
   fetchWithTimeout: async () => { throw new Error('Fixture has no product lookup'); },
   console: { log() {} }, globalAffilioPrefix: null,

@@ -1,3 +1,5 @@
+import {buildResultReport, reportEvidence} from './result-reports.js';
+import {createPriceReports, classifyPriceObservation, createMonitoringQueue} from './price-observations.js';
 import {createPriceReporter,normalizeReportUrl} from './missing-price.js';
 import { createDiagnostics, createSearchTrace, uuid } from './diagnostics.js';
 import { createUsageTracker, classifyCategory } from './usage.js';
@@ -33,15 +35,35 @@ const survey = typeof createSurvey === 'function' ? createSurvey({ storage: chro
   version: chrome.runtime.getManifest().version, endpoint: PIQO_MONITORING_BASE_URL + '/v1/surveys' }) : null;
 const priceReporter=typeof createPriceReporter==='function'?createPriceReporter({storage:chrome.storage.local,version:chrome.runtime.getManifest().version,buildChannel:chrome.runtime.getManifest().version_name?.endsWith('-dev')?'dev':'release',endpoint:PIQO_MONITORING_BASE_URL+'/v1/price-reports'}):null;
 const activeTraces = new Map();
+const resultReports = typeof createMonitoringQueue === 'function' ? createMonitoringQueue({
+  storage: chrome.storage.local, endpoint: PIQO_MONITORING_BASE_URL + '/v1/result-reports',
+  key: 'piqoResultReportsV1', idField: 'search_id', payloadField: 'reports', batchSize: 5,
+}) : null;
+
+function queueResultReport(product, trace, count, failed = false) {
+  if (!resultReports) return;
+  void Promise.resolve().then(async () => {
+    const manifest = chrome.runtime.getManifest();
+    const report = buildResultReport({
+      product, trace, count, failed, version: manifest.version,
+      build: manifest.version_name?.endsWith('-dev') ? 'dev' : 'release',
+    });
+    if (!report) return;
+    await resultReports.enqueue(report);
+    await resultReports.flush();
+  }).catch(() => { /* Reporting must not interrupt search. */ });
+}
+const priceReports = typeof createPriceReports === 'function' ? createPriceReports({storage:chrome.storage.local,
+  endpoint:PIQO_MONITORING_BASE_URL+'/v1/price-observations'}) : null;
 const usage = typeof createUsageTracker === 'function' && chrome.storage.session ? createUsageTracker({
   storage:chrome.storage.session,version:chrome.runtime.getManifest().version,
   buildChannel:chrome.runtime.getManifest().version_name?.endsWith('-dev')?'dev':'release',
   endpoint:PIQO_MONITORING_BASE_URL+'/v1/usage/activity',
 }) : null;
 chrome.alarms?.create('piqo-diagnostics', { periodInMinutes: 1 });
-chrome.alarms?.onAlarm.addListener(alarm => { if (alarm.name === 'piqo-diagnostics') { void diagnostics?.flush(); void priceReporter?.flush(); } });
+chrome.alarms?.onAlarm.addListener(alarm => { if (alarm.name === 'piqo-diagnostics') { void diagnostics?.flush(); void priceReporter?.flush(); void priceReports?.flush(); void resultReports?.flush(); } });
 void diagnostics?.flush();
-void priceReporter?.flush();
+void priceReporter?.flush(); void priceReports?.flush(); void resultReports?.flush();
 
 const PIQO_ONBOARDING_STATE_KEY = 'piqoOnboardingState';
 
@@ -338,6 +360,7 @@ function startTabSearch(tabId, product, options = {}) {
     .then(results => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       trace?.finish(results.length);
+      queueResultReport(product, trace, results.length);
       activeTraces.delete(tabId);
       void survey?.complete(trace?.id).catch(() => {});
       void diagnostics?.flush();
@@ -353,10 +376,10 @@ function startTabSearch(tabId, product, options = {}) {
         updatedAt: Date.now(),
         pageKey,
       }, true).then(() => { if (tabSearches.isCurrent(tabId, requestId)) broadcastTabUpdate("RESULTS_UPDATED", tabId, { results, requestId, searchId: trace?.id, isPartial: false }); });
-    })
-    .catch(error => {
+    }, error => {
       if (!tabSearches.isCurrent(tabId, requestId)) return;
       trace?.finish(null, false, true);
+      queueResultReport(product, trace, 0, true);
       activeTraces.delete(tabId);
       void diagnostics?.flush();
       const message = error?.message || "جستجو ناموفق بود";
@@ -371,11 +394,34 @@ function startTabSearch(tabId, product, options = {}) {
         updatedAt: Date.now(),
         pageKey,
       }, true).then(() => { if (tabSearches.isCurrent(tabId, requestId)) broadcastTabUpdate("SEARCH_FAILED", tabId, { error: message, requestId }); });
-    });
+    }).catch(() => { /* A tab-state write failure is not a result failure. */ });
   });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'PRICE_PROBE' || message.type === 'PRICE_OBSERVATION') {
+    if (!sender.url || new URL(sender.url).origin !== new URL(chrome.runtime.getURL('sidebar/sidebar.html')).origin ||
+      new URL(sender.url).pathname !== '/sidebar/sidebar.html' || !Number.isInteger(sender.tab?.id) || sender.tab.id !== message.tabId) return false;
+    (async()=>{
+      const probe = await chrome.tabs.sendMessage(sender.tab.id, {type:'PIQO_PRICE_PROBE'});
+      if (!probe?.open || probe.loading || !probe.opening || !probe.product || probe.product.source === 'manual') return {ignored:true};
+      const productUrl = normalizeReportUrl(probe.product.sourceUrl, probe.product.source);
+      if (!productUrl || normalizeReportUrl(probe.page_url, probe.product.source) !== productUrl) return {ignored:true};
+      if (message.type === 'PRICE_PROBE') return probe;
+      if (probe.excluded) return {accepted:true};
+      const product = probe.product;
+      if (message.opening !== probe.opening || message.page_url !== probe.page_url || message.product_url !== product.sourceUrl ||
+        message.extracted_price !== product.price || !/^[a-f0-9-]{36}$/i.test(message.observation_id||'')) return {ignored:true};
+      const outcome = classifyPriceObservation(probe, message.displayed_price);
+      const failure = outcome === 'extraction_missing' || outcome === 'display_missing';
+      await priceReports?.enqueue({observation_id:message.observation_id,occurred_at:new Date().toISOString(),
+        site:new URL(productUrl).hostname,source:product.source,extension_version:chrome.runtime.getManifest().version,
+        build_channel:chrome.runtime.getManifest().version_name?.endsWith('-dev')?'dev':'release',
+        outcome,evidence:probe.evidence,...(failure?{product_url:productUrl,product_name:String(product.name).trim().slice(0,300)}:{})});
+      void priceReports?.flush();return {accepted:true};
+    })().then(sendResponse).catch(()=>sendResponse({ignored:true}));
+    return true;
+  }
   if(message.type==='MISSING_PRICE_REPORT'){
     // Only the top-level content script on the current matching merchant page.
     const current=normalizeReportUrl(sender.url,message.product?.source),requested=normalizeReportUrl(message.product?.sourceUrl,message.product?.source);
@@ -535,7 +581,10 @@ async function searchPrices(product, options = {}) {
       // Product default offers can change within our general search-cache TTL.
       // Refresh Digikala prices before displaying cached cards, keeping their
       // supplied affiliate links and the existing fallback on lookup failure.
-      if (options.trace) options.trace.cache = 'client';
+      if (options.trace) {
+        options.trace.cache = 'client';
+        if (cached.productKey === normalizeProductText(product.name)) options.trace.resultEvidence = cached.resultEvidence;
+      }
       const refreshDigikala = createDigikalaOfferVerifier(options.trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, options.trace) : fetchWithTimeout, { refresh: true });
       const results = await Promise.all(cached.results.map(offer => refreshDigikala(offer)));
       logApiCache("cache-hit", cacheKey, results.length);
@@ -550,18 +599,24 @@ async function searchPrices(product, options = {}) {
     options.trace?.link(shared.trace);
     const res = await shared.promise;
     if (options.trace && shared.trace) { options.trace.requests.push(...shared.trace.requests); options.trace.sources.push(...shared.trace.sources); }
+    if (options.trace && shared.trace && shared.productKey === normalizeProductText(product.name) && typeof reportEvidence === 'function') {
+      options.trace.resultEvidence = reportEvidence(shared.trace);
+    }
     if (options.onProgress) options.onProgress(res);
     return res;
   }
 
   const searchPromise = searchPricesFromStores(product, options.onProgress, options.trace)
     .then(async results => {
-      await searchCache.set(cacheKey, results);
+      const resultEvidence = typeof reportEvidence === 'function' ? reportEvidence(options.trace) : undefined;
+      try {
+        await searchCache.set(cacheKey, results, {productKey: normalizeProductText(product.name), resultEvidence});
+      } catch { /* Search results remain usable if the cache write fails. */ }
       return results;
     })
     .finally(() => inFlightSearches.delete(cacheKey));
 
-  inFlightSearches.set(cacheKey, { promise: searchPromise, trace: options.trace });
+  inFlightSearches.set(cacheKey, { promise: searchPromise, trace: options.trace, productKey: normalizeProductText(product.name) });
   return searchPromise;
 }
 
@@ -700,7 +755,7 @@ async function searchPricesFromStores(product, onProgress, trace = null) {
     }
     // Deduplicate by URL to avoid huge arrays
     const unique = new Map();
-    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    combined.forEach(item => unique.set(item.url || item, item));
     return [...unique.values()];
   });
 
@@ -713,7 +768,7 @@ async function searchPricesFromStores(product, onProgress, trace = null) {
       if (res.status === 'fulfilled' && res.value) combined.push(...res.value);
     });
     const unique = new Map();
-    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    combined.forEach(item => unique.set(item.url || item, item));
     return [...unique.values()];
   });
 
@@ -726,7 +781,7 @@ async function searchPricesFromStores(product, onProgress, trace = null) {
       if (res.status === 'fulfilled' && res.value) combined.push(...res.value);
     });
     const unique = new Map();
-    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    combined.forEach(item => unique.set(item.url || item, item));
     return [...unique.values()];
   });
 
@@ -739,7 +794,7 @@ async function searchPricesFromStores(product, onProgress, trace = null) {
       if (res.status === 'fulfilled' && res.value) combined.push(...res.value);
     });
     const unique = new Map();
-    combined.forEach(item => { if (item.url) unique.set(item.url, item); });
+    combined.forEach(item => unique.set(item.url || item, item));
     return [...unique.values()];
   });
 
@@ -762,12 +817,24 @@ async function searchPricesFromStores(product, onProgress, trace = null) {
   const allValidResults = [];
   const verifyDigikalaOffer = createDigikalaOfferVerifier(trace && typeof diagnosticFetch === 'function' ? diagnosticFetch(fetchWithTimeout, trace) : fetchWithTimeout);
 
-  const filterAndScore = (r) => {
-    if (r.availability === false) return null;
+  const filterAndScore = (r, reject) => {
+    if (r.availability === false) return reject('unavailable');
+    try {
+      const link = new URL(r.url);
+      if (!['https:', 'http:'].includes(link.protocol) || link.username || link.password) return reject('invalid_link');
+    } catch {
+      return reject('invalid_link');
+    }
+    if (!Number.isFinite(r.price) || r.price <= 0) return reject('invalid_price');
     const isUsed = r.condition === "used" || ["دیوار", "شیپور"].includes(r.store);
-    if (!isUsed && product.price && !isPriceValid(product.price, r.price)) return null;
+    if (!isUsed && product.price && !isPriceValid(product.price, r.price)) return reject('uncertain');
     const match = assessProductMatch(product.name, r.name, isUsed);
-    if (!match.accepted) return null;
+    if (!match.accepted) {
+      const confirmed = ['model-mismatch', 'capacity-mismatch', 'brand-mismatch', 'product-type-mismatch',
+        'accessory-instead-of-product', 'accessory-type-mismatch', 'replica-mismatch'];
+      const reasons = match.reasons || [];
+      return reject(confirmed.find(reason => reasons.includes(reason)) || 'uncertain');
+    }
     return { ...r, matchScore: match.score, matchConfidence: match.confidence, condition: isUsed ? "used" : "new" };
   };
 
@@ -836,8 +903,13 @@ async function searchPricesFromStores(product, onProgress, trace = null) {
     req.p.then(async res => {
       logApiResults(req.name, res.length);
       const checked = await Promise.all(res.map(offer => verifyDigikalaOffer(offer, req.name)));
-      const valid = checked.map(offer => filterAndScore({ ...offer, retrievalSource: req.source })).filter(Boolean);
-      trace?.source({ source: req.source, status: res.length ? 'success' : (trace.requests.some(r => r.source === req.source && !['success','empty'].includes(r.status)) ? 'failed' : ['emalls','digipay'].includes(req.source) ? 'parse_error' : 'empty'), result_count: res.length, accepted_count: valid.length, cache: 'network' });
+      const rejected = {};
+      const reject = reason => {
+        rejected[reason] = (rejected[reason] || 0) + 1;
+        return null;
+      };
+      const valid = checked.map(offer => filterAndScore({ ...offer, retrievalSource: req.source }, reject)).filter(Boolean);
+      trace?.source({ source: req.source, status: res.length ? 'success' : (trace.requests.some(r => r.source === req.source && !['success','empty'].includes(r.status)) ? 'failed' : ['emalls','digipay'].includes(req.source) ? 'parse_error' : 'empty'), result_count: res.length, accepted_count: valid.length, result_rejections: rejected, cache: 'network' });
       allValidResults.push(...valid);
       if (onProgress) onProgress(sortAndDedupe(allValidResults));
       return valid;

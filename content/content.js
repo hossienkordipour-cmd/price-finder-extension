@@ -160,35 +160,18 @@
     return name.length > 2 ? name : null;
   }
 
-  let lastReportProduct = null;
-  function priceReportSnapshot() {
-    detectProduct();
-    if (!lastReportProduct) return null;
-    // Only current-product evidence; never inspect the sidebar's result cards.
-    let unavailable = false;
-    const title = document.querySelector('h1')?.textContent || '';
-    if (/^(?:ناموجود|توقف تولید)/.test(title.trim())) unavailable = true;
-    for (const marker of document.querySelectorAll('[data-testid="product-unavailable"], [data-cro="pdp-unavailable"], button')) {
-      if (marker.getClientRects().length && /^(?:ناموجود|موجود شد خبرم کن|موجود شد خبرم کنید)$/.test((marker.textContent || '').replace(/\u200c/g,' ').replace(/\s+/g,' ').trim())) unavailable = true;
-    }
-    for (const script of document.querySelectorAll('script[type="application/ld+json"]')) {
-      try {
-        const value=JSON.parse(script.textContent),items=Array.isArray(value)?value:[value];
-        for(const item of items){if(item['@type']!=='Product')continue;
-          if(item.name && !lastReportProduct.name.includes(String(item.name).slice(0,12)) && !String(item.name).includes(lastReportProduct.name.slice(0,12)))continue;
-          const offers=Array.isArray(item.offers)?item.offers:[item.offers];
-          if(offers.length && offers.every(o=>o && /(?:OutOfStock|Discontinued)$/.test(String(o.availability)))) unavailable=true;
-        }
-      } catch {}
-    }
-    return {product:lastReportProduct,unavailable,loading:!!document.querySelector('main[aria-busy="true"], [data-testid="product-loading"], [data-cro="pdp-loading"]')};
-  }
-  const priceReportObserver=globalThis.PiqoPriceReportDetection?.createDetector({read:priceReportSnapshot,
-    send:product=>chrome.runtime.sendMessage({type:'MISSING_PRICE_REPORT',product:{name:product.name,sourceUrl:product.sourceUrl,source:product.source,price:product.price}})});
-  globalThis.PiqoPriceReportObserver=priceReportObserver;
-
   let lastUrl = location.href;
   let lastDetectedKey = null;
+  let priceProbeProduct = null;
+  chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (message.type !== 'PIQO_PRICE_PROBE') return;
+    const frame = document.getElementById('piqo-popup-iframe');
+    const open = document.visibilityState === 'visible' && frame?.style.display !== 'none' && frame?.style.opacity === '1';
+    const product = priceProbeProduct;
+    const loading = document.readyState !== 'complete' || Boolean(document.querySelector('main[aria-busy="true"], [data-testid="product-loading"], [data-cro="pdp-loading"]'));
+    respond({ open: Boolean(open), loading, opening: frame?.piqoPriceOpening || null,
+      page_url: location.href, product, ...((open && !loading && globalThis.piqoPriceEvidence?.probe(product)) || {eligible:false,evidence:'unknown'}) });
+  });
   let detectionTimer = null;
   let metadataTimer = null;
   let clearedPageUrl = null;
@@ -201,9 +184,6 @@
   function checkNavigation() {
     if (location.href === lastUrl) return false;
     lastUrl = location.href;
-    lastReportProduct = null;
-    priceReportObserver?.navigate();
-    priceReportObserver?.close();
     clearTimeout(metadataTimer);
     lastDetectedKey = null;
     clearedPageUrl = null;
@@ -234,7 +214,6 @@
     window.addEventListener('hashchange', checkNavigation);
     // pushState need not change the DOM; observe URLs without overriding sites' APIs.
     setInterval(checkNavigation, 250);
-    setInterval(()=>void priceReportObserver?.check(),1000);
     scheduleDetection();
   }
 
@@ -259,6 +238,7 @@ let detectionInterval = null;
 
 
   function removePiqoUI() {
+    priceProbeProduct = null;
     const widget = document.getElementById('piqo-widget-container');
     if (widget) widget.remove();
     const popup = document.getElementById('piqo-popup-iframe');
@@ -300,10 +280,10 @@ let detectionInterval = null;
     }
 
 if (product && product.name) {
-      lastReportProduct = product;
       clearedPageUrl = null;
       product.navigationUrl = removeTrackingFromUrl(new URL(location.href)).toString();
       product.sourceUrl = getPrivacySafePageUrl();
+      priceProbeProduct = product;
       clearInterval(detectionInterval);
       const detectionKey = `${product.sourceUrl || location.href}|${product.name}|${product.price || ""}|${product.variantId || ""}|${product.image || ""}`;
       if (detectionKey !== lastDetectedKey) {
@@ -316,7 +296,7 @@ if (product && product.name) {
         injectFloatingButton();
       }
     } else {
-      lastReportProduct = null;
+      priceProbeProduct = null;
       if (lastDetectedKey && clearedPageUrl !== location.href) {
         clearedPageUrl = location.href;
         chrome.runtime.sendMessage({ type: 'PRODUCT_CLEARED', url: removeTrackingFromUrl(new URL(location.href)).toString() });
@@ -520,7 +500,8 @@ if (product && product.name) {
 
     if (name) name = cleanProductName(name);
     if (!name) return null;
-    return { name, image, source: "basalam", store: "باسلام", sourceUrl: window.location.href, price: null };
+    const price = /\/product\/\d+(?:\/|$)/.test(window.location.pathname) ? extractVisiblePurchasePrice() : null;
+    return { name, image, source: "basalam", store: "باسلام", sourceUrl: window.location.href, price };
   }
 
   // ==============================
@@ -658,6 +639,54 @@ if (product && product.name) {
       image: getAbsoluteUrl(getImageFromElement(photo)), source: 'etkala', store: 'ات‌کالا', sourceUrl: location.href };
   }
 
+  function extractVisiblePurchasePrice() {
+    const nonSale = 'del, s, strike, [aria-hidden="true"], [hidden], [class*="line-through"], [class*="installment" i], [class*="old-price" i], [class*="price-old" i], [class*="recommend" i], [class*="related-product" i]';
+    const isVisible = element => {
+      if (!element.getClientRects().length || element.closest(nonSale)) return false;
+      for (let node = element; node && node !== document.body; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.visibility === "hidden" || style.opacity === "0" || style.textDecorationLine.includes("line-through")) return false;
+      }
+      return true;
+    };
+    const readAmount = element => {
+      // Keep inline amount and currency together, without pulling in nested installment details.
+      const parts = [];
+      for (const node of element.childNodes) {
+        if (node.nodeType === 3) {
+          parts.push(node.textContent);
+        } else if (node.matches?.(".bi-toman") && isVisible(node)) {
+          parts.push("تومان");
+        } else if (node.matches?.("span, b, strong, small, em, bdi") && isVisible(node)) {
+          parts.push(node.textContent);
+        }
+      }
+      const text = parts.join(" ").trim();
+      const match = text.match(/^([0-9۰-۹٠-٩][0-9۰-۹٠-٩,٬،\s]*)\s*(تومان|ریال|IRT|IRR)$/i);
+      return match ? parsePriceInTomans(match[1], match[2]) : null;
+    };
+    const buttons = Array.from(document.querySelectorAll('button, input[type="submit"], [role="button"]'))
+      .filter(button => {
+        const label = button.getAttribute("aria-label") || button.value || button.textContent;
+        return /^(?:افزودن به سبد(?: خرید)?|اضافه کردن به سبد(?: خرید)?|خرید آنلاین|خرید محصول|add to (?:cart|bag)|buy now)$/i
+          .test(label.trim().replace(/[\s\u200c]+/g, " ")) &&
+          !button.disabled && button.getAttribute("aria-disabled") !== "true" && isVisible(button);
+      });
+    const prices = new Set();
+    for (const button of buttons) {
+      let scope = button.parentElement;
+      for (let depth = 0; scope && scope !== document.body && depth < 4; depth++, scope = scope.parentElement) {
+        if (buttons.some(other => other !== button && scope.contains(other))) break;
+        const scopedPrices = Array.from(scope.querySelectorAll('span, b, strong, small, em, bdi, p, div, [itemprop="price"]'))
+          .filter(isVisible).map(readAmount).filter(price => price > 0);
+        if (!scopedPrices.length) continue;
+        for (const price of scopedPrices) prices.add(price);
+        break;
+      }
+    }
+    return prices.size === 1 ? prices.values().next().value : null;
+  }
+
   function extractGeneric() {
     let name = null;
     let price = null;
@@ -715,6 +744,8 @@ if (product && product.name) {
       || price > 0
       || document.querySelector('[itemtype*="schema.org/Product"]');
     if (!isLikelyProduct) return null;
+
+    if (!price) price = extractVisiblePurchasePrice();
 
     return { 
       name, 
@@ -891,12 +922,12 @@ function togglePiqoPopup(isLeft) {
         unlockPage();
       }
       backdrop.style.display = mobile && open ? 'block' : 'none';
-      panelFrame.contentWindow?.postMessage({type:'PIQO_PANEL_LAYOUT',mobile,expanded:panelFrame.piqoExpanded},'*');
+      panelFrame.contentWindow?.postMessage({type:'PIQO_PANEL_LAYOUT',mobile,expanded:panelFrame.piqoExpanded,open,opening:panelFrame.piqoPriceOpening},'*');
     };
     panelFrame.piqoSyncLayout = syncLayout;
     panelFrame.piqoClose = () => {
-      globalThis.PiqoPriceReportObserver?.close();
       panelFrame.style.opacity = '0';
+      panelFrame.piqoSyncLayout();
       panelFrame.style.transform = panelFrame.piqoMobile ? 'translateY(100%)' : (panelFrame.piqoIsLeft ? 'translateX(-40px)' : 'translateX(40px)');
       backdrop.style.display = 'none'; unlockPage();
       const currentWidget = document.getElementById('piqo-widget-container');
@@ -955,8 +986,8 @@ function togglePiqoPopup(isLeft) {
 
   // Toggle
   if (popup.style.display === 'none' || popup.style.opacity === '0') {
+    popup.piqoPriceOpening = globalThis.crypto?.randomUUID?.() || String(Date.now());
     chrome.runtime.sendMessage({ type: 'PIQO_OPENED', url: location.href }).catch(() => {});
-    globalThis.PiqoPriceReportObserver?.open();
     // Prep animation
     popup.style.transform = slideStart;
     popup.style.display = 'block';
@@ -983,6 +1014,7 @@ function togglePiqoPopup(isLeft) {
 window.addEventListener('message', (event) => {
   const popup = document.getElementById('piqo-popup-iframe');
   if (!popup || event.source !== popup.contentWindow) return;
+  if (event.data?.type === 'PIQO_PRICE_PANEL_READY') popup.piqoSyncLayout?.();
   if (event.data === 'CLOSE_PIQO_POPUP') popup.piqoClose?.();
   if (event.data === 'TOGGLE_PIQO_SHEET' && popup.piqoMobile) {
     popup.piqoExpanded = !popup.piqoExpanded;

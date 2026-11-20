@@ -376,8 +376,9 @@ chrome.runtime.onMessage.addListener((message) => {
 
   if (message.type === "RESULTS_UPDATED") {
     diagnosticSearchId = message.searchId || diagnosticSearchId;
-    allResults = message.results || [];
-    renderResults(allResults, message.isPartial);
+    const results = message.results || [];
+    if (message.isPartial && results.length === 0) return;
+    renderResults(results, message.isPartial);
     if (!message.isPartial) window.piqoOfferSurvey?.();
   }
 
@@ -400,7 +401,6 @@ function generateCardHtml(item, isBase = false) {
     }
   }
 
-  const reportNotice=isBase && !(Number(item.price)>0) && ['digikala','technolife','khanoumi','gooshishop','etkala','basalam','masterkala','digipay','kalaoma'].includes(item.source)?'<p class="price-report-note">اگر قیمت خوانده نشود، نام و لینک عمومی همین محصول برای بررسی فنی به پیکو ارسال می‌شود.</p>':'';
   const storeText = item.condition === "used" ? `${item.store} - کارکرده` : item.store;
 
   const tag = isBase ? 'div' : 'a';
@@ -417,13 +417,12 @@ function generateCardHtml(item, isBase = false) {
         <div class="card-store-row">
           <div class="card-store">${isBase ? item.store : storeText}</div>
         </div>
-        ${reportNotice}
         ${item.price && item.price > 0 ? `
         <div class="card-bottom">
           <div class="card-price">${formatPrice(item.price)}<span>تومان</span></div>
           ${discountHtml ? discountHtml.replace('class="card-discount"', 'class="card-discount bottom-discount"') : ''}
         </div>
-        ` : (isBase ? '<div class="card-bottom"><div class="card-price">قیمت نامشخص</div></div>' : '')}
+        ` : ''}
       </div>
     </${tag}>
   `;
@@ -579,10 +578,10 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
     diagnosticSearchId = state.searchId || null;
     currentProduct = state.currentProduct;
     if (state.isLoading) {
-      showLoading();
-      if (state.searchResults && state.searchResults.length > 0) {
-        allResults = state.searchResults;
-        renderResults(allResults, true);
+      if (state.searchResults?.length) {
+        renderResults(state.searchResults, true);
+      } else {
+        showLoading();
       }
     } else if (Array.isArray(state.searchResults)) {
       allResults = state.searchResults;

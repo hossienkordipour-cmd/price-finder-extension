@@ -20,12 +20,12 @@ export class SearchResultCache {
     return entry;
   }
 
-  set(key, results) {
+  set(key, results, metadata = {}) {
     this.writeQueue = this.writeQueue.then(async () => {
       const data = await this.storage.get([SEARCH_CACHE_STORAGE_KEY]);
       const cache = data[SEARCH_CACHE_STORAGE_KEY] || {};
       const cachedAt = this.now();
-      cache[key] = { cachedAt, results };
+      cache[key] = { ...metadata, cachedAt, results };
 
       const entries = Object.entries(cache)
         .sort(([, first], [, second]) => second.cachedAt - first.cachedAt)
