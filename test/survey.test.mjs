@@ -1,27 +1,46 @@
 import assert from 'node:assert/strict';
-import {createSurvey,recordCompletion,isSurveyDue,SURVEY_KEY} from '../survey.js';
-const DAY=86400000;
-let time=new Date('2026-10-01T09:00:00Z').getTime(),state={};
-for(let i=0;i<5;i++) state=recordCompletion(state,'search-'+i,time);
-assert.equal(isSurveyDue(state,time),false);
-state=recordCompletion(state,'next',time+DAY);state=recordCompletion(state,'last',time+2*DAY);
-assert.equal(isSurveyDue(state,time+2*DAY),true);
-assert.deepEqual(recordCompletion(state,'last',time+2*DAY),state,'Reopen/repeated completion is not another search');
-let store={[SURVEY_KEY]:state},requests=[],offline=true;
-const options={storage:{async get(k){return structuredClone({[k]:store[k]});},async set(v){Object.assign(store,structuredClone(v));}},version:'1.1.0',endpoint:'http://127.0.0.1/surveys',now:()=>time,
-fetcher:async(_,opts)=>{requests.push(JSON.parse(opts.body));if(offline)throw new Error('offline');return {ok:true,json:async()=>({survey_id:requests.at(-1).survey_id})};}};
-const survey=createSurvey(options);
-const [id,second]=await Promise.all([survey.claim(),survey.claim()]);assert.ok(id);assert.equal(second,null,'Multiple tabs cannot both claim');
-assert.equal(await survey.claim(),null);
-time+=14*DAY;const reminder=await survey.claim();assert.ok(reminder);assert.notEqual(reminder,id);
-time+=14*DAY;assert.equal(await survey.claim(),null);
-assert.equal((await survey.submit({survey_id:reminder,answer:'yes',reason:'x'.repeat(1001)})).success,false);
-assert.equal((await survey.submit({survey_id:reminder,answer:'no',reason:'کند بود'})).success,false);
-offline=false;
-const restarted=createSurvey(options);
-assert.equal((await restarted.submit({survey_id:reminder,answer:'yes',reason:'changed'})).success,true);
-assert.deepEqual(requests[0],requests[1],'Retry freezes original response and id');
-assert.equal('search_id' in requests[1],false);
-assert.equal(await restarted.claim(),null);
-assert.equal(store[SURVEY_KEY].pendingResponse,null);
-console.log('Survey: five searches/three days, duplicate completion, two concurrent tabs, 14-day reminder, max invitations, manual retry and independent payload passed');
+import { createSurvey, SURVEY_KEY } from '../survey.js';
+
+const store = { piqoSurveyV1: { answered: true, invites: 2 } };
+const requests = [];
+let offline = true;
+const options = {
+  storage: {
+    async get(key) { return structuredClone({ [key]: store[key] }); },
+    async set(values) { Object.assign(store, structuredClone(values)); },
+  },
+  version: '1.1.0',
+  endpoint: 'http://127.0.0.1/surveys',
+  fetcher: async (_, request) => {
+    const payload = JSON.parse(request.body);
+    requests.push(payload);
+    if (offline) throw new Error('offline');
+    return { ok: true, json: async () => ({ survey_id: payload.survey_id }) };
+  },
+};
+
+const survey = createSurvey(options);
+const [first, reopened] = await Promise.all([survey.claim('first'), survey.claim('first')]);
+assert.ok(first.survey_id);
+assert.equal(first.survey_id, reopened.survey_id);
+const second = await survey.claim('second');
+assert.notEqual(first.survey_id, second.survey_id);
+const vote = { survey_id: first.survey_id, answer: 'no', reason: 'کند بود' };
+assert.equal((await survey.submit('second', vote)).success, false);
+assert.equal((await survey.submit('first', vote)).success, false);
+await survey.dismiss('second', second.survey_id);
+assert.equal(await survey.claim('second'), null);
+
+const restarted = createSurvey(options);
+assert.deepEqual((await restarted.claim('first')).pending, requests[0]);
+const third = await restarted.claim('third');
+assert.ok(third.survey_id);
+offline = false;
+assert.equal((await restarted.submit('first', { ...vote, answer: 'yes' })).success, true);
+assert.deepEqual(requests[0], requests[1]);
+assert.equal(await restarted.claim('first'), null);
+assert.equal((await restarted.submit('third', { survey_id: third.survey_id, answer: 'yes', reason: '' })).success, true);
+assert.equal(Object.hasOwn(requests[2], 'searchId'), false);
+assert.equal(store[SURVEY_KEY].third.closed, true);
+assert.ok((await restarted.claim('fourth')).survey_id);
+console.log('Survey: one vote per search, legacy state ignored, independent dismissal, and durable retry passed');

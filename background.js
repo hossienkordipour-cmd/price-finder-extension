@@ -362,7 +362,6 @@ function startTabSearch(tabId, product, options = {}) {
       trace?.finish(results.length);
       queueResultReport(product, trace, results.length);
       activeTraces.delete(tabId);
-      void survey?.complete(trace?.id).catch(() => {});
       void diagnostics?.flush();
       attachHistoryAffiliateLinks(results);
       return persistTabState(tabId, {
@@ -429,12 +428,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     priceReporter.enqueue(message.product).then(result=>{sendResponse(result);if(result.queued)void priceReporter?.flush();}).catch(()=>sendResponse({queued:false}));return true;
   }
 
-  if (['RESULTS_PRESENTED', 'SURVEY_CLAIM', 'SURVEY_SUBMIT', 'USAGE_ACTIVE'].includes(message.type)) {
+  if (['RESULTS_PRESENTED', 'SURVEY_CLAIM', 'SURVEY_DISMISS', 'SURVEY_SUBMIT', 'USAGE_ACTIVE'].includes(message.type)) {
     // Only the packaged sidebar may submit diagnostics acknowledgements or surveys.
     if (!sender.url?.startsWith(chrome.runtime.getURL('sidebar/sidebar.html'))) return false;
     if (message.type === 'USAGE_ACTIVE') { void usage?.active(); sendResponse({success:true}); return false; }
-    if (message.type === 'SURVEY_CLAIM') { survey?.claim().then(id => sendResponse({ survey_id: id })).catch(() => sendResponse({})); return true; }
-    if (message.type === 'SURVEY_SUBMIT') { survey?.submit(message.payload || {}).then(sendResponse).catch(() => sendResponse({ success: false })); return true; }
+    if (message.type === 'SURVEY_CLAIM') {
+      const tabId = sender.tab?.id ?? message.tabId;
+      const key = getTabStateKey(tabId);
+      chrome.storage.local.get(key).then(data => {
+        const state = data[key];
+        if (state?.searchId && state.searchId === message.searchId && !state.isLoading && Array.isArray(state.searchResults)) {
+          return survey?.claim(state.searchId);
+        }
+      }).then(result => sendResponse(result || {})).catch(() => sendResponse({}));
+      return true;
+    }
+    if (message.type === 'SURVEY_DISMISS') { survey?.dismiss(message.searchId, message.survey_id).then(() => sendResponse({ success: true })).catch(() => sendResponse({ success: false })); return true; }
+    if (message.type === 'SURVEY_SUBMIT') { survey?.submit(message.searchId, message.payload || {}).then(sendResponse).catch(() => sendResponse({ success: false })); return true; }
     runTabOperation(message.tabId, async () => {
       const key = getTabStateKey(message.tabId);
       const state = (await chrome.storage.local.get(key))[key];

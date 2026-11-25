@@ -334,6 +334,7 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.requestId && message.requestId < latestRequestId) return;
 
   if (message.type === 'PAGE_CHANGED') {
+    window.piqoOfferSurvey?.(null);
     latestRequestId = message.requestId || latestRequestId;
     currentProduct = null;
     allResults = [];
@@ -379,7 +380,7 @@ chrome.runtime.onMessage.addListener((message) => {
     const results = message.results || [];
     if (message.isPartial && results.length === 0) return;
     renderResults(results, message.isPartial);
-    if (!message.isPartial) window.piqoOfferSurvey?.();
+    if (!message.isPartial) window.piqoOfferSurvey?.(message.searchId, currentTabId, results.length > 0);
   }
 
   if (message.type === "SEARCH_ERROR" || message.type === "SEARCH_FAILED") {
@@ -429,6 +430,7 @@ function generateCardHtml(item, isBase = false) {
 }
 
 function showLoading() {
+  window.piqoOfferSurvey?.(null);
   updateGuideNavigation();
   emptyState.classList.add("hidden");
   if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
@@ -445,6 +447,7 @@ function showLoading() {
 }
 
 function showError() {
+  window.piqoOfferSurvey?.(null);
   updateGuideNavigation();
   emptyState.classList.add("hidden");
   if (typeof guideState !== "undefined" && guideState) guideState.classList.add("hidden");
@@ -586,6 +589,7 @@ chrome.runtime.sendMessage({ type: "GET_TAB_STATE" }, (response) => {
     } else if (Array.isArray(state.searchResults)) {
       allResults = state.searchResults;
       renderResults(allResults, false);
+      window.piqoOfferSurvey?.(state.searchId, currentTabId, allResults.length > 0);
     } else {
       showLoading();
       chrome.runtime.sendMessage({ type: "START_SEARCH", tabId: currentTabId, product: currentProduct });

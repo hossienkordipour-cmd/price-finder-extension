@@ -16,6 +16,7 @@
   --piqo-line: #E6EDE9;
   --piqo-button-bg: #171717;
   --piqo-button-hover: #303030;
+  --piqo-icon-button-bg: #E5E7EB;
 }
 
 * {
@@ -70,7 +71,7 @@ html {
   border-radius: 20px;
 }
 .header-close-btn {
-  background: #E5E7EB;
+  background: var(--piqo-icon-button-bg);
   border: none;
   width: 32px;
   height: 32px;
